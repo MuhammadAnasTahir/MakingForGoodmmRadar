@@ -65,7 +65,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .lang-toggle button { min-width: 50px; }
 
 /* ---------------------------------------------------------------- page */
-.page { max-width: 1440px; margin: 0 auto; padding: 28px 32px 40px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+.page { max-width: none; margin: 0; padding: 24px 28px 40px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
 .monitor { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
 .page-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
 .page-title { font-size: 26px; font-weight: 600; letter-spacing: -.015em; line-height: 1.25; }
