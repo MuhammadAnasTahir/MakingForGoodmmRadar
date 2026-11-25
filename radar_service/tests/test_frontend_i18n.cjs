@@ -14,16 +14,16 @@ for(const k of Object.keys(zh)){const vars=s=>(s.match(/\{\w+\}/g)||[]).sort().j
 
 // ---- 2. index.html: every key exists; Chinese only inside data-i18n elements or the language buttons
 const html=fs.readFileSync(path.join(web,'index.html'),'utf8');
-for(const m of html.matchAll(/data-i18n(?:-aria|-alt|-placeholder)?="([^"]+)"/g))assert(m[1] in zh,'unknown key in index.html: '+m[1]);
+for(const m of html.matchAll(/data-i18n(?:-aria|-alt|-placeholder|-title)?="([^"]+)"/g))assert(m[1] in zh,'unknown key in index.html: '+m[1]);
 const stripped=html.replace(/<!--[\s\S]*?-->/g,'')
   .replace(/(<(\w+)[^>]*\sdata-i18n="[^"]+"[^>]*>)[^<]*(<\/\2>)/g,'$1$3')       // tagged text
-  .replace(/\s(aria-label|alt|placeholder)="[^"]*"/g,'')                          // attributes are set from data-i18n-*
+  .replace(/\s(aria-label|alt|placeholder|title)="[^"]*"/g,'')                          // attributes are set from data-i18n-*
   .replace(/<button id="lang(Zh|En)"[^>]*>[^<]*<\/button>/g,'')                  // language names stay in their own language
   .replace(/<div id="bootError"[\s\S]*?<\/div>/,'');                                // start-up failure banner is bilingual on purpose
 const left=stripped.split('\n').filter(l=>CJK.test(l));
 assert.deepStrictEqual(left,[],'untranslatable Chinese text in index.html');
-for(const m of html.matchAll(/\s(aria-label|alt|placeholder)="([^"]*)"/g))
-  if(CJK.test(m[2]))assert(new RegExp(`data-i18n-(aria|alt|placeholder)="[^"]+"[^>]*\\s${m[1]}="${m[2]}"|${m[1]}="${m[2]}"[^>]*data-i18n-`).test(html),'attribute without key: '+m[0]);
+for(const m of html.matchAll(/\s(aria-label|alt|placeholder|title)="([^"]*)"/g))
+  if(CJK.test(m[2]))assert(new RegExp(`data-i18n-(aria|alt|placeholder|title)="[^"]+"[^>]*\\s${m[1]}="${m[2]}"|${m[1]}="${m[2]}"[^>]*data-i18n-`).test(html),'attribute without key: '+m[0]);
 
 // ---- 3. run the page in English and collect every rendered string
 class Element{
@@ -51,7 +51,7 @@ const events=[
  {id:4,timestamp:1004,track_id:3,acknowledged:true,kind:'prolonged_low',details:{x_m:1,y_m:2,low_duration_s:30,low_h_m:.4,reference_m:1.7}},
  {id:3,timestamp:1003,track_id:2,acknowledged:false,kind:'fall',details:{x_m:1,y_m:1,drop_m:1.4,duration_s:.5,peak_speed_mps:2.7,low_h_m:.3,reference_m:1.7}}];
 let online=true;
-const context={console,Date,Math,JSON,Number,Array,Object,Error,AbortController,Promise,URLSearchParams,location:{search:''},
+const context={console,Date,Math,JSON,Number,Array,Object,Error,AbortController,Promise,URLSearchParams,location:{search:''},matchMedia:()=>({matches:false}),
  document:{querySelector:get,querySelectorAll:()=>[],createElement:()=>new Element(),documentElement:new Element()},
  window:{devicePixelRatio:1},localStorage:{getItem:k=>stored[k]??null,setItem(k,v){stored[k]=v},removeItem(k){delete stored[k]}},
  requestAnimationFrame(){},setTimeout:()=>0,clearTimeout(){},setInterval(){},
@@ -82,6 +82,13 @@ const allText=()=>[...elements.values()].map(texts).join(' ')+' '+context.docume
  for(const s of ['Safe zone','Excluded','Radar','X: left/right   Y: forward (m)','Radar coordinates (height is not measured from the floor)'])
    assert(canvasText.includes(s),'missing canvas text: '+s);
  assert.equal(context.document.documentElement.lang,'en');
+ // status line (English): one pending fall alert outranks the person who is low
+ assert(en.includes('1 alert is waiting to be checked'),'banner title');assert.equal(get('#roomStatus').className,'banner is-alert');
+ // theme toggle: flips data-theme, persists, and switches the map palette
+ const root=context.document.documentElement,before=root.attrs['data-theme'];
+ get('#themeToggle').listeners.click();
+ assert.notEqual(root.attrs['data-theme'],before);assert.equal(stored['radarsense-theme'],root.attrs['data-theme']);
+ get('#themeToggle').listeners.click();assert.equal(root.attrs['data-theme'],before);
  assert.equal(get('#langEn').attrs['aria-pressed'],'true');
 
  // ---- 4. toggle back to Chinese: persisted, and the same views now render Chinese

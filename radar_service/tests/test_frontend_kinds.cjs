@@ -23,7 +23,7 @@ const events=[
 ];
 const fall={window_seconds:2.5,height_ratio:.6,confirm_seconds:1,cooldown_seconds:30,recovery_ratio:.85,recovery_seconds:2,
  min_drop_m:.6,max_low_height_m:.7,fall_max_duration_s:1.2,fall_min_speed_mps:1,floor_alert_s:30,safe_zones:[[-2,-1,2,4]]};
-const context={console,Date,Math,JSON,Number,Array,Object,Error,AbortController,Promise,URLSearchParams,location:{search:''},
+const context={console,Date,Math,JSON,Number,Array,Object,Error,AbortController,Promise,URLSearchParams,location:{search:''},matchMedia:()=>({matches:false}),
  document:{querySelector:get,querySelectorAll:()=>[],createElement:()=>new Element(),documentElement:new Element()},
  window:{devicePixelRatio:1},localStorage:{getItem:()=>null,setItem(){},removeItem(){}},
  requestAnimationFrame(){},setTimeout:()=>0,clearTimeout(){},setInterval(){},

@@ -15,6 +15,7 @@ from collections import deque
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+mimetypes.add_type('font/woff2', '.woff2')
 MAGIC = b'\x02\x01\x04\x03\x06\x05\x08\x07'
 ROOT = Path(__file__).resolve().parent
 LOCK = threading.Lock()
@@ -526,7 +527,7 @@ class Handler(BaseHTTPRequestHandler):
         target = (webroot / relative).resolve()
         if webroot not in target.parents or not target.is_file():
             return self.send_error(404)
-        if target.suffix.lower() not in {'.html','.js','.css','.png','.jpg','.jpeg','.svg','.webp','.ico'}:
+        if target.suffix.lower() not in {'.html','.js','.css','.png','.jpg','.jpeg','.svg','.webp','.ico','.woff2'}:
             return self.send_error(404)
         payload = target.read_bytes()
         self.send_response(200)
@@ -587,6 +588,16 @@ def load_fall_config(fall):
     return merged
 
 
+class Server(ThreadingHTTPServer):
+    # A browser opens about a dozen connections at once when the page loads. With Python's default
+    # queue of 5, Windows refuses the rest, and a refused app.js leaves the page dead.
+    request_queue_size = 64
+    daemon_threads = True
+    # On Windows, address reuse lets a second copy of the service share the port without any error,
+    # and the page then flips between the two copies. Refuse instead.
+    allow_reuse_address = sys.platform != 'win32'
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', default=str(ROOT / 'config.json'))
@@ -609,9 +620,10 @@ def main():
     logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler(), RotatingFileHandler(ROOT / 'service.log', maxBytes=2_000_000, backupCount=3, encoding='utf-8')])
     with database():
         pass
+    # Bind the web port first: if another copy is already running, stop here before touching the COM ports.
+    server = Server(('127.0.0.1', config['http_port']), Handler)
     worker = threading.Thread(target=radar_worker, args=(config, parseStandardFrame), daemon=True)
     worker.start()
-    server = ThreadingHTTPServer(('127.0.0.1', config['http_port']), Handler)
     print('Open http://127.0.0.1:' + str(config['http_port']), flush=True)
     try:
         server.serve_forever()

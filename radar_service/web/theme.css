@@ -1,26 +1,60 @@
-/* Design tokens. Edit here to restyle the page; no build step, just refresh.
-   The browser "Display and appearance" settings override --accent and --bg until reset. */
+/* Design tokens for light and dark mode. Edit here to restyle; no build step, just refresh.
+   Light is modelled on Tabler (MIT), dark on GitHub Primer "dark dimmed" (MIT): soft grey, never pure black.
+   The "Display" settings can override --accent. */
+@font-face { font-family: "IBM Plex Sans"; font-weight: 400; font-display: swap; src: url("fonts/ibm-plex-sans-latin-400.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-weight: 500; font-display: swap; src: url("fonts/ibm-plex-sans-latin-500.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-weight: 600; font-display: swap; src: url("fonts/ibm-plex-sans-latin-600.woff2") format("woff2"); }
+
+:root, [data-theme="light"] {
+  color-scheme: light;
+  --bg: #f1f4f8;
+  --surface: #ffffff;
+  --surface-2: #f6f8fb;
+  --track: #e6eaf0;
+  --border: #dce1e8;
+  --border-strong: #c3cbd6;
+  --text: #182433;
+  --text-2: #3a4859;
+  --muted: #5f6b7a;
+
+  --accent: #1f62c9;
+  --accent-soft: #e6eefb;
+  --on-accent: #ffffff;
+  --ok: #1a7a45;
+  --ok-bg: #e6f4ec;
+  --warn: #9a5a00;
+  --warn-bg: #fdf1dc;
+  --alert: #c4302b;
+  --alert-bg: #fdecea;
+  --row-hover: #f6f8fb;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #1c2128;
+  --surface: #22272e;
+  --surface-2: #2a313c;
+  --track: #2d333b;
+  --border: #373e47;
+  --border-strong: #444c56;
+  --text: #d1d7e0;
+  --text-2: #b4bcc7;
+  --muted: #9198a1;
+
+  --accent: #478be6;
+  --accent-soft: rgba(65, 132, 228, .15);
+  --on-accent: #ffffff;
+  --ok: #57ab5a;
+  --ok-bg: rgba(70, 149, 74, .16);
+  --warn: #c69026;
+  --warn-bg: rgba(174, 124, 20, .16);
+  --alert: #e5534b;
+  --alert-bg: rgba(229, 83, 75, .13);
+  --row-hover: #262c34;
+}
+
 :root {
-  --bg: #0e1013;
-  --surface: #15181d;
-  --surface-2: #1b1f25;
-  --surface-3: #232831;
-  --border: #252a32;
-  --border-strong: #343b46;
-
-  --text: #e6e8ec;
-  --text-2: #b6bcc6;
-  --muted: #858e9b;
-
-  --accent: #4cb8a5;
-  --on-accent: #0b0d10;
-  --ok: #3fb68b;
-  --warn: #e0a43a;
-  --alert: #ef5b5b;
-  --alert-bg: rgba(239, 91, 91, .07);
-  --warn-bg: rgba(224, 164, 58, .09);
-
   --radius: 8px;
   --radius-sm: 6px;
-  --font: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  --font: "IBM Plex Sans", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif;
 }

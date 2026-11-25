@@ -27,6 +27,7 @@ TI parser 来自已解压 Toolbox/common，不能删掉该目录。若导入还�
 ## 功能
 - 真实串口采集、TI parser、网页实时目标与真实点云。
 - 夜间深色页面；等比例相对 XY 网格，默认 X -2～2、Y 0～4 米。无具体房间标定，不显示为精确房间布局。
+- 右上角月亮/太阳按钮切换深色/浅色模式（第一次按系统设置，之后记住选择；也可用 ?theme=dark）。字体 IBM Plex Sans 和图标 Tabler Icons 都已放在 web 文件夹内，离线可用（OFL/MIT 许可）。
 - 右上角“中文 | EN”切换网页语言，选择保存在浏览器；也可直接打开 http://127.0.0.1:8765/?lang=en 。所有文字在 web/i18n.js，修改措辞时中英文两边都要改（tests/test_frontend_i18n.cjs 会检查）。
 - 外观与显示范围可在网页设置，浏览器本地保存；颜色和字体在 web/theme.css，样式在 web/styles.css，源文件可直接编辑，刷新即可，不需要构建。
 - 区域 ROI 和排除矩形保存到 filters.json。默认关闭，避免原 Y≤2 米屏蔽 Y≈2.1 米处的躺下目标。显示范围不等于后台过滤范围。
@@ -44,4 +45,4 @@ TI parser 来自已解压 Toolbox/common，不能删掉该目录。若导入还�
 本机服务仅监听 127.0.0.1。需要其他电脑访问时应另做网络接入配置。
 
 ## 测试
-包内 tests 可通过 python -m unittest discover -s tests -v、node tests/test_frontend.cjs、node tests/test_frontend_kinds.cjs 和 node tests/test_frontend_i18n.cjs 执行。离线测试通过不等于新包已在实验室雷达上完成验证，安装后仍需检查串口和现场动作。
+包内 tests 可通过 python -m unittest discover -s tests -v、node tests/test_frontend.cjs、node tests/test_frontend_kinds.cjs 和 node tests/test_frontend_i18n.cjs 执行。tests/test_server.py 检查网页服务能同时接受浏览器的大量连接（旧版 Windows 上会随机拒绝 app.js，导致页面不动）。离线测试通过不等于新包已在实验室雷达上完成验证，安装后仍需检查串口和现场动作。
