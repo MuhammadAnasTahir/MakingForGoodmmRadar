@@ -269,7 +269,7 @@ async function pollEvents() {
 }
 
 // ---------------------------------------------------------------- canvas
-const FONT='14px "IBM Plex Sans", "Microsoft YaHei UI", sans-serif', FONT_BOLD='600 14px "IBM Plex Sans", "Microsoft YaHei UI", sans-serif';
+const FONT='16px "IBM Plex Sans", "Microsoft YaHei UI", sans-serif', FONT_BOLD='600 16px "IBM Plex Sans", "Microsoft YaHei UI", sans-serif';
 function mapPoint(x,y,w,h) {
   const [a,b,c,d]=settings.bounds,scale=Math.min((w-100)/(b-a),(h-84)/(d-c));
   const left=(w-(b-a)*scale)/2+10,top=(h-(d-c)*scale)/2;
