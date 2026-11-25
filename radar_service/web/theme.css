@@ -1,19 +1,26 @@
-/* Edit these variables to change the default style. Browser appearance settings
-   override accent/background until “恢复默认” is selected. No rebuild required. */
-:root { --accent:#ea8b3c; --bg:#faf7f2; --live-radius:16px; }
-body{font-size:16px}.brand-sub,.sidebar-foot,.facility-chip,.page-sub,.st-sub{font-size:14px}
-.main{min-width:0}.view{scroll-behavior:smooth}.sidebar .nav-item{font-size:16px}.sidebar .privacy-card{font-size:14px}.sidebar .privacy-card p{margin-top:10px}
-.live-kpi{padding:20px;border-radius:var(--live-radius)}.live-kpi span{color:var(--muted);font-size:14px}.live-kpi b{display:block;font-size:30px;margin-top:8px}
-.live-note{font-size:14px;color:var(--muted);margin:12px 0;line-height:1.7;overflow-wrap:anywhere}.live-stage{position:relative;height:420px;background:#f0f3f6;overflow:hidden;border-radius:12px}
-.live-stage img{position:absolute;width:100%;height:100%;object-fit:cover;opacity:.13}.live-stage canvas{position:relative;width:100%;height:100%;display:block}.live-map{min-width:0}.room-grid{grid-template-columns:minmax(0,1.5fr) minmax(280px,1fr)}
-.live-section{margin-top:22px}.live-target{padding:16px 0;border-bottom:1px solid var(--border)}.live-target b{font-size:18px}.live-target p{margin-top:6px;font-size:14px}.live-target.warning{border-left:4px solid var(--alert);padding-left:12px}
-.live-event{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px;margin:10px 0;border-radius:10px;background:var(--alert-soft);border:1px solid var(--alert)}.live-event.ack{background:var(--panel-2);border-color:var(--border)}
-.live-button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:10px 16px;font-size:15px;margin:8px 8px 8px 0}.live-button:disabled{opacity:.5;cursor:wait}.live-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:18px}
-label{font-size:14px;display:block}input:not([type=checkbox]),select,textarea{display:block;width:100%;padding:9px;border:1px solid var(--border-strong);border-radius:7px;font:inherit;color:var(--text);background:var(--panel);margin-top:6px}input[type=color]{height:44px}textarea{margin-bottom:10px}summary{cursor:pointer;font-size:17px;font-weight:600}
-#connection{padding:5px 12px;background:var(--warn-soft);border-radius:30px;font-size:14px}#diagnostics{min-height:24px}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
-@media(max-width:1000px){.sidebar{display:none}.room-grid{grid-template-columns:1fr}.kpi-grid{grid-template-columns:repeat(2,1fr)}.view{padding:16px}.live-stage{height:350px}}
-@media(max-width:550px){.live-form{grid-template-columns:1fr}.live-event{flex-direction:column;align-items:flex-start}.topbar{padding:12px}.topbar-right{gap:8px}#clock{display:none}.live-stage{height:300px}}
+/* Design tokens. Edit here to restyle the page; no build step, just refresh.
+   The browser "Display and appearance" settings override --accent and --bg until reset. */
+:root {
+  --bg: #0e1013;
+  --surface: #15181d;
+  --surface-2: #1b1f25;
+  --surface-3: #232831;
+  --border: #252a32;
+  --border-strong: #343b46;
 
-:root{--bg:#0d1420;--bg-2:#111c2b;--panel:#162234;--panel-2:#1b2c40;--panel-3:#203248;--text:#e6edf7;--muted:#afc0d4;--faint:#95aac1;--border:#314359;--border-strong:#50657f;--accent:#65dcc4;--accent-soft:#203d40;--accent-tint:#183238;--alert:#ff7777;--alert-soft:#3b242e;--warn-soft:#3b3424;--ok-soft:#183932;--shadow:none;--shadow-lg:none}
-.live-stage{height:520px;background:#101c2b}.live-stage img{display:none}.live-event.ack{opacity:.8}.live-button{color:#0d1420}.topbar,.sidebar{background:var(--panel)}.room-grid{grid-template-columns:minmax(0,1.7fr) minmax(260px,1fr)}
-.live-event.info{background:var(--panel-2);border-color:var(--border);opacity:.6}.live-event.info b{font-weight:500;color:var(--muted)}
+  --text: #e6e8ec;
+  --text-2: #b6bcc6;
+  --muted: #858e9b;
+
+  --accent: #4cb8a5;
+  --on-accent: #0b0d10;
+  --ok: #3fb68b;
+  --warn: #e0a43a;
+  --alert: #ef5b5b;
+  --alert-bg: rgba(239, 91, 91, .07);
+  --warn-bg: rgba(224, 164, 58, .09);
+
+  --radius: 8px;
+  --radius-sm: 6px;
+  --font: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+}

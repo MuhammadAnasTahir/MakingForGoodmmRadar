@@ -6,6 +6,7 @@ class Element{
  append(...xs){this.children.push(...xs)}
  replaceChildren(...xs){this.children=xs}
  addEventListener(name,fn){this.listeners[name]=fn}
+ setAttribute(name,value){this[name]=value}
  getBoundingClientRect(){return {width:700,height:400}}
  getContext(){return new Proxy({}, {get:()=>()=>{},set:()=>true})}
 }
@@ -22,8 +23,8 @@ const events=[
 ];
 const fall={window_seconds:2.5,height_ratio:.6,confirm_seconds:1,cooldown_seconds:30,recovery_ratio:.85,recovery_seconds:2,
  min_drop_m:.6,max_low_height_m:.7,fall_max_duration_s:1.2,fall_min_speed_mps:1,floor_alert_s:30,safe_zones:[[-2,-1,2,4]]};
-const context={console,Date,Math,JSON,Number,Array,Object,Error,AbortController,Promise,
- document:{querySelector:get,createElement:()=>new Element(),documentElement:new Element()},
+const context={console,Date,Math,JSON,Number,Array,Object,Error,AbortController,Promise,URLSearchParams,location:{search:''},
+ document:{querySelector:get,querySelectorAll:()=>[],createElement:()=>new Element(),documentElement:new Element()},
  window:{devicePixelRatio:1},localStorage:{getItem:()=>null,setItem(){},removeItem(){}},
  requestAnimationFrame(){},setTimeout:()=>0,clearTimeout(){},setInterval(){},
  fetch:async url=>{
@@ -36,6 +37,7 @@ const context={console,Date,Math,JSON,Number,Array,Object,Error,AbortController,
 };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(path.join(web,'data.js'),'utf8'),context);
+vm.runInContext(fs.readFileSync(path.join(web,'i18n.js'),'utf8'),context);
 vm.runInContext(fs.readFileSync(path.join(web,'app.js'),'utf8'),context);
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 const texts=e=>[e.textContent,...e.children.map(texts)].flat(Infinity).join(' ');
@@ -44,15 +46,15 @@ const texts=e=>[e.textContent,...e.children.map(texts)].flat(Infinity).join(' ')
  assert.equal(get('#alertCount').textContent,3,'only fall + prolonged_low (incl. old rows) are counted');
  const rows=get('#events').children;
  assert.equal(rows.length,5);
- assert.equal(rows[0].className,'live-event info');
+ assert(rows[0].className.split(' ').includes('info'));
  assert.equal(rows[0].children.length,1,'info events have no acknowledge button');
  assert(texts(rows[0]).includes('主动躺下 · 已排除（下降 2.1 s，0.6 m/s）'),texts(rows[0]));
  assert(texts(rows[1]).includes('下蹲/弯腰 · 已排除'));
  assert(texts(rows[2]).includes('长时间低位 · 待人工查看'));assert.equal(rows[2].children.length,2);
  assert(texts(rows[3]).includes('疑似跌倒 · 待人工查看'));assert(texts(rows[3]).includes('峰值速度 2.7 m/s'));
  assert(texts(rows[4]).includes('疑似跌倒 · 待人工查看'),'missing kind is shown as fall');
- const rule=get('#fallRule').textContent;
- for(const s of ['下降大','下降快','1.2 秒','安全区','主动躺下','长时间低位','30 秒'])assert(rule.includes(s),s);
+ const rule=texts(get('#fallRule'));
+ for(const s of ['下降大','下降快','1.2 秒','安全区','慢慢躺下','长时间低位','30 秒'])assert(rule.includes(s),s);
  const card=texts(get('#targets'));
  assert(card.includes('低位（未报警）'));assert(card.includes('参考高度 1.72 m'));assert(card.includes('用时 2.1 s'));
  console.log('PASS frontend kinds: info greyed and not counted, kind labels, rule text, low-state target card');

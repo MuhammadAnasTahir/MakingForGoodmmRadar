@@ -1,18 +1,153 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RadarSense · 实时雷达监测</title><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="theme.css"></head>
-<body><div class="app-shell">
-<aside class="sidebar"><div class="brand"><div class="brand-mark"><span class="brand-radar"></span></div><div><div class="brand-name">Radar<span>Sense</span></div><div class="brand-sub">本地毫米波安全监测</div></div></div>
-<div class="facility-chip"><div><b id="roomLabel">实验室测试房间</b><div>1 个雷达节点 · IWR6843AOP</div></div></div>
-<nav class="nav"><a class="nav-item" href="#monitor">实时监测</a><a class="nav-item" href="#eventSection">报警记录</a><a class="nav-item" href="#settings">显示与外观设置</a><a class="nav-item" href="#filters">检测区域设置</a></nav>
-<div class="privacy-card"><b>无摄像头采集</b><p>房间图为示意素材，不是实时视频。数据由本机后台处理。</p><p>匿名 ID 是临时跟踪编号，不代表身份。</p></div>
-<div class="sidebar-foot" id="sidebarStatus">正在连接本地雷达服务</div></aside>
-<main class="main"><header class="topbar"><b>实时监测 / 单节点</b><div class="topbar-right"><span id="connection" role="status">连接中</span><span id="clock"></span></div></header>
-<div class="view"><section id="monitor"><div class="page-head"><div><h1 class="page-title" id="title">实验室测试房间</h1><p class="page-sub">真实雷达位置与疑似跌倒预警 · 事件需人工核查</p></div></div>
-<div class="kpi-grid"><div class="card live-kpi"><span>当前跟踪目标</span><b id="targetCount">—</b></div><div class="card live-kpi"><span>待查看报警</span><b id="alertCount">—</b></div><div class="card live-kpi"><span>帧号</span><b id="frame">—</b></div><div class="card live-kpi"><span>数据年龄</span><b id="age">—</b></div></div>
-<p id="diagnostics" class="live-note" role="status"></p>
-<div class="room-grid"><section class="card panel live-map"><div class="section-title">目标实时视图</div><div class="radar-tabs"><button id="sceneTab" class="rtab active">房间坐标图</button><button id="cloudTab" class="rtab">真实点云 · 三维投影</button></div><div class="live-stage"><img id="roomScene" src="assets/scene-activity.png" alt="房间示意素材，非实际测量布局"><canvas id="radarCanvas" aria-label="实时目标与雷达点云"></canvas></div><p id="plotNote" class="live-note"></p></section>
-<section class="card panel"><div class="section-title">目标信息</div><div id="targets" aria-live="polite">等待数据</div><p class="live-note">心率、呼吸率、站立/坐姿分类尚未接入。高度是雷达目标估计，不是头部高度。</p></section></div></section>
-<section id="eventSection" class="card panel live-section"><div class="section-title">跌倒报警与排除记录 · 人工核查</div><p id="fallRule" class="live-note"></p><div id="events" aria-live="polite">读取中</div></section>
-<details id="settings" class="card panel live-section"><summary>显示与外观设置 · 无需修改代码</summary><form id="appearanceForm" class="live-form"><label>房间名称<input id="roomName" maxlength="60" required></label><label>主题颜色<input id="accent" type="color"></label><label>背景颜色<input id="background" type="color"></label><label>房间示意素材<select id="scene"><option value="activity">活动室</option><option value="bedroom">卧室</option><option value="shared">双人间</option><option value="lounge">休息室</option><option value="restroom">卫生间</option><option value="corridor">走廊</option></select></label><label>坐标图 X 最小（米）<input id="mapXmin" type="number" step="0.1" required></label><label>坐标图 X 最大（米）<input id="mapXmax" type="number" step="0.1" required></label><label>坐标图 Y 最小（米）<input id="mapYmin" type="number" step="0.1" required></label><label>坐标图 Y 最大（米）<input id="mapYmax" type="number" step="0.1" required></label><div><button type="submit" class="live-button">保存外观</button><button type="button" id="resetAppearance" class="live-button">恢复默认</button></div></form><p class="live-note">外观保存在当前浏览器。坐标图范围只改变显示比例；家具素材没有测量标定，不能据图判断实际家具坐标。正式布局需要现场校准。</p><span id="appearanceMessage" role="status"></span></details>
-<details id="filters" class="card panel live-section"><summary>检测区域设置 · 后台保存</summary><p class="live-note">区域使用现有后台的 X/Y 坐标。被排除位置内的人也不会参与跌倒判断，请勿覆盖可能坐人的区域。点云显示包含原始环境反射，不代表每个点都是人。</p><form id="filterForm"><label><input id="filterEnabled" type="checkbox">启用区域过滤</label><div class="live-form"><label>X 最小<input id="fx0" type="number" step="0.1" required></label><label>X 最大<input id="fx1" type="number" step="0.1" required></label><label>Y 最小<input id="fy0" type="number" step="0.1" required></label><label>Y 最大<input id="fy1" type="number" step="0.1" required></label></div><label>排除区域：每行 xmin,xmax,ymin,ymax；不排除则留空<textarea id="exclusions" rows="4"></textarea></label><button type="submit" id="saveFilters" class="live-button" disabled>保存并应用过滤</button><span id="filterMessage" role="status"></span></form><p id="motionNote" class="live-note"></p></details>
-</div></main></div><script src="data.js"></script><script src="app.js"></script></body></html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RadarSense</title>
+<script>window.onerror=function(m,s,l){var e=document.getElementById("bootError");if(e){e.hidden=false;e.lastChild.textContent=m+" ("+String(s).split("/").pop()+":"+l+")";}};</script>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<!-- Every visible text carries a data-i18n key (web/i18n.js). Text here is only the Chinese fallback. -->
+<!-- Shown until app.js finishes starting, so a broken page never looks like a quiet room. Bilingual because i18n.js may be the part that failed. -->
+<div id="bootError" class="boot-error" role="alert"><b lang="zh-CN">页面脚本没有加载成功，数据不会更新。请按 Ctrl+F5 刷新；如果还不行，检查后台窗口是否在运行。</b> <b lang="en">The page script did not load, so nothing here will update. Press Ctrl+F5; if that does not help, check that the backend window is running.</b><small></small></div>
+<header class="topbar">
+  <a class="brand" href="#monitor">
+    <svg class="brand-mark" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M10 17.5 3.4 6.9a12 12 0 0 1 13.2 0Z"/><path d="M6.6 12a6 6 0 0 1 6.8 0"/></svg>
+    <span class="brand-name">RadarSense</span>
+  </a>
+  <nav class="topnav" data-i18n-aria="nav.label" aria-label="页面导航">
+    <a href="#monitor" data-i18n="nav.monitor">实时监测</a>
+    <a href="#eventSection" data-i18n="nav.events">报警记录</a>
+    <a href="#settings" data-i18n="nav.display">显示设置</a>
+    <a href="#filters" data-i18n="nav.zones">检测区域</a>
+  </nav>
+  <div class="topbar-right">
+    <span id="connection" class="status-pill is-wait" role="status"></span>
+    <span id="clock" class="clock"></span>
+    <div class="segmented lang-toggle" role="group" data-i18n-aria="lang.label" aria-label="语言">
+      <button id="langZh" type="button" class="active" aria-pressed="true" lang="zh-CN">中文</button>
+      <button id="langEn" type="button" aria-pressed="false" lang="en">EN</button>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+  <section id="monitor" class="monitor">
+    <div class="page-head">
+      <div>
+        <h1 id="title" class="page-title"></h1>
+        <p class="page-sub" data-i18n="page.sub">这个房间的跌倒提醒。每条提醒都请到现场看一眼。</p>
+      </div>
+      <p id="sourceNote" class="source-note"></p>
+    </div>
+
+    <dl class="stats">
+      <div class="stat"><dt data-i18n="kpi.targets">跟踪目标</dt><dd id="targetCount">—</dd></div>
+      <div class="stat"><dt data-i18n="kpi.alerts">待查看报警</dt><dd id="alertCount">—</dd></div>
+      <div class="stat"><dt data-i18n="kpi.frame">帧号</dt><dd id="frame">—</dd></div>
+      <div class="stat"><dt data-i18n="kpi.age">数据延迟</dt><dd id="age">—</dd></div>
+    </dl>
+    <p id="diagnostics" class="diagnostics" role="status"></p>
+
+    <div class="grid">
+      <section class="panel map-panel">
+        <header class="panel-head">
+          <h2 data-i18n="map.title">目标实时视图</h2>
+          <div class="segmented" role="tablist">
+            <button id="sceneTab" type="button" role="tab" class="rtab active" aria-selected="true" data-i18n="map.tabMap">坐标图</button>
+            <button id="cloudTab" type="button" role="tab" class="rtab" aria-selected="false" data-i18n="map.tabCloud">点云</button>
+          </div>
+        </header>
+        <div class="live-stage">
+          <img id="roomScene" src="assets/scene-activity.png" alt="房间示意素材，非实际测量布局" data-i18n-alt="map.sceneAlt" hidden>
+          <canvas id="radarCanvas" aria-label="实时目标与雷达点云" data-i18n-aria="map.canvasAria"></canvas>
+        </div>
+        <p id="plotNote" class="note"></p>
+      </section>
+
+      <section class="panel targets-panel">
+        <header class="panel-head"><h2 data-i18n="targets.title">目标信息</h2></header>
+        <div id="targets" aria-live="polite"></div>
+        <p class="note" data-i18n="targets.note">高度是雷达对整个人的估计，不是头顶高度。</p>
+      </section>
+    </div>
+  </section>
+
+  <section id="eventSection" class="panel">
+    <header class="panel-head">
+      <div>
+        <h2 data-i18n="events.title">报警与排除记录</h2>
+        <p class="panel-meta" data-i18n="events.meta">点“确认已查看”只表示有人看过，不代表确实摔倒了。</p>
+      </div>
+      <div class="segmented" role="group" data-i18n-aria="events.filterLabel" aria-label="记录筛选">
+        <button id="evAll" type="button" class="rtab active" aria-pressed="true" data-i18n="events.all">全部</button>
+        <button id="evAlerts" type="button" class="rtab" aria-pressed="false" data-i18n="events.alerts">报警</button>
+        <button id="evInfo" type="button" class="rtab" aria-pressed="false" data-i18n="events.info">已排除</button>
+      </div>
+    </header>
+    <div id="fallRule" class="rule"></div>
+    <div id="events" class="event-list" aria-live="polite"></div>
+  </section>
+
+  <details id="settings" class="panel">
+    <summary><span data-i18n="settings.title">显示与外观</span><span class="summary-hint" data-i18n="settings.hint">保存在当前浏览器</span></summary>
+    <form id="appearanceForm" class="form">
+      <div class="form-grid">
+        <label class="span-2"><span data-i18n="form.roomName">房间名称</span><input id="roomName" maxlength="60" required></label>
+        <label><span data-i18n="form.accent">强调色</span><input id="accent" type="color"></label>
+        <label><span data-i18n="form.background">背景色</span><input id="background" type="color"></label>
+        <label class="span-2"><span data-i18n="form.scene">房间示意素材</span><select id="scene">
+          <option value="activity" data-i18n="scene.activity">活动室</option>
+          <option value="bedroom" data-i18n="scene.bedroom">卧室</option>
+          <option value="shared" data-i18n="scene.shared">双人间</option>
+          <option value="lounge" data-i18n="scene.lounge">休息室</option>
+          <option value="restroom" data-i18n="scene.restroom">卫生间</option>
+          <option value="corridor" data-i18n="scene.corridor">走廊</option>
+        </select></label>
+        <label><span data-i18n="form.xmin">坐标图 X 最小（米）</span><input id="mapXmin" type="number" step="0.1" required></label>
+        <label><span data-i18n="form.xmax">坐标图 X 最大（米）</span><input id="mapXmax" type="number" step="0.1" required></label>
+        <label><span data-i18n="form.ymin">坐标图 Y 最小（米）</span><input id="mapYmin" type="number" step="0.1" required></label>
+        <label><span data-i18n="form.ymax">坐标图 Y 最大（米）</span><input id="mapYmax" type="number" step="0.1" required></label>
+      </div>
+      <p class="note" data-i18n="settings.note">这里只改变坐标图显示的范围，不影响检测。</p>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary" data-i18n="btn.saveAppearance">保存外观</button>
+        <button type="button" id="resetAppearance" class="btn" data-i18n="btn.reset">恢复默认</button>
+        <span id="appearanceMessage" class="form-msg" role="status"></span>
+      </div>
+    </form>
+  </details>
+
+  <details id="filters" class="panel">
+    <summary><span data-i18n="filters.title">检测区域</span><span class="summary-hint" data-i18n="filters.hint">保存到后台</span></summary>
+    <form id="filterForm" class="form">
+      <p class="note" data-i18n="filters.note">忽略区域里的人不会被检测跌倒，别把有人坐卧的地方划进去。床请在 config.json 的 safe_zones 里设置。</p>
+      <label class="check"><input id="filterEnabled" type="checkbox"><span data-i18n="filters.enable">启用区域过滤</span></label>
+      <div class="form-grid">
+        <label><span data-i18n="filters.x0">X 最小</span><input id="fx0" type="number" step="0.1" required></label>
+        <label><span data-i18n="filters.x1">X 最大</span><input id="fx1" type="number" step="0.1" required></label>
+        <label><span data-i18n="filters.y0">Y 最小</span><input id="fy0" type="number" step="0.1" required></label>
+        <label><span data-i18n="filters.y1">Y 最大</span><input id="fy1" type="number" step="0.1" required></label>
+        <label class="span-4"><span data-i18n="filters.exclusions">忽略区域：每行一个 xmin,xmax,ymin,ymax，不需要就留空</span><textarea id="exclusions" rows="3" placeholder="1.5,2.0,3.5,4.0" data-i18n-placeholder="filters.placeholder"></textarea></label>
+      </div>
+      <div class="form-actions">
+        <button type="submit" id="saveFilters" class="btn btn-primary" disabled data-i18n="filters.save">保存并应用</button>
+        <span id="filterMessage" class="form-msg" role="status"></span>
+      </div>
+      <p id="motionNote" class="note"></p>
+    </form>
+  </details>
+
+  <footer class="footer">
+    <span data-i18n="footer.camera">没有摄像头，数据不出这台电脑</span>
+    <span data-i18n="footer.ids">目标编号是临时的，不对应具体的人</span>
+    <span data-i18n="footer.device">IWR6843AOP · 1 个雷达节点</span>
+  </footer>
+</main>
+<script src="data.js"></script>
+<script src="i18n.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

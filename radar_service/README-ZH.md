@@ -27,7 +27,8 @@ TI parser 来自已解压 Toolbox/common，不能删掉该目录。若导入还�
 ## 功能
 - 真实串口采集、TI parser、网页实时目标与真实点云。
 - 夜间深色页面；等比例相对 XY 网格，默认 X -2～2、Y 0～4 米。无具体房间标定，不显示为精确房间布局。
-- 外观与显示范围可在网页设置，浏览器本地保存；源文件 web/theme.css、web/app.js 可直接编辑，刷新即可，不需要构建。
+- 右上角“中文 | EN”切换网页语言，选择保存在浏览器；也可直接打开 http://127.0.0.1:8765/?lang=en 。所有文字在 web/i18n.js，修改措辞时中英文两边都要改（tests/test_frontend_i18n.cjs 会检查）。
+- 外观与显示范围可在网页设置，浏览器本地保存；颜色和字体在 web/theme.css，样式在 web/styles.css，源文件可直接编辑，刷新即可，不需要构建。
 - 区域 ROI 和排除矩形保存到 filters.json。默认关闭，避免原 Y≤2 米屏蔽 Y≈2.1 米处的躺下目标。显示范围不等于后台过滤范围。
 - 保留旧运动过滤：30 秒未偏离初始位置 0.25 米的目标会隐藏；不是人/家具识别，静坐者也可能被隐藏。config.json 的 motion_filter.enabled 可关闭。
 - 跌倒规则（config.json/fall）：“疑似跌倒”需同时满足 ①下降 ≥ min_drop_m(0.6 米) 且低位 ≤ max_low_height_m(0.7 米)；②10%→90% 下降用时 ≤ fall_max_duration_s(1.2 秒) 且峰值下降速度 ≥ fall_min_speed_mps(1.0 米/秒，按 0.2 秒区间计算)；③confirm_seconds(1 秒) 后仍在低位；④不在 safe_zones 安全区（如床，格式 [[xmin,xmax,ymin,ymax]]）。
@@ -43,4 +44,4 @@ TI parser 来自已解压 Toolbox/common，不能删掉该目录。若导入还�
 本机服务仅监听 127.0.0.1。需要其他电脑访问时应另做网络接入配置。
 
 ## 测试
-包内 tests 可通过 python -m unittest discover -s tests -v、node tests/test_frontend.cjs 和 node tests/test_frontend_kinds.cjs 执行。离线测试通过不等于新包已在实验室雷达上完成验证，安装后仍需检查串口和现场动作。
+包内 tests 可通过 python -m unittest discover -s tests -v、node tests/test_frontend.cjs、node tests/test_frontend_kinds.cjs 和 node tests/test_frontend_i18n.cjs 执行。离线测试通过不等于新包已在实验室雷达上完成验证，安装后仍需检查串口和现场动作。

@@ -5,14 +5,15 @@ class Element{
  append(...xs){this.children.push(...xs)}
  replaceChildren(...xs){this.children=xs}
  addEventListener(name,fn){this.listeners[name]=fn}
+ setAttribute(name,value){this[name]=value}
  getBoundingClientRect(){return {width:700,height:400}}
  getContext(){return new Proxy({}, {get:()=>()=>{},set:()=>true})}
 }
 const elements=new Map(),get=id=>{if(!elements.has(id))elements.set(id,new Element());return elements.get(id)};
 let online=true,ack=false;const writes=[];
 const data={status:'streaming',frame_number:10,last_frame_at:Date.now()/1000,frame_age_seconds:.02,tracks:[{track_id:7,x_m:.2,y_m:1,z_m:.1,vx_mps:0,vy_mps:0,vz_mps:0,height_max_m:1.6,fall_state:'tracking',motion_state:'motion_confirmed'}],points:[[0,1,0,0]],point_count:1};
-const context={console,Date,Math,JSON,Number,Array,Object,Error,AbortController,Promise,
- document:{querySelector:get,createElement:()=>new Element(),documentElement:new Element()},
+const context={console,Date,Math,JSON,Number,Array,Object,Error,AbortController,Promise,URLSearchParams,location:{search:''},
+ document:{querySelector:get,querySelectorAll:()=>[],createElement:()=>new Element(),documentElement:new Element()},
  window:{devicePixelRatio:1},localStorage:{getItem:()=>null,setItem(){},removeItem(){}},
  requestAnimationFrame(){},setTimeout:()=>0,clearTimeout(){},setInterval(){},
  fetch:async(url,opt={})=>{
@@ -28,6 +29,7 @@ const context={console,Date,Math,JSON,Number,Array,Object,Error,AbortController,
 };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(path.join(web,'data.js'),'utf8'),context);
+vm.runInContext(fs.readFileSync(path.join(web,'i18n.js'),'utf8'),context);
 vm.runInContext(fs.readFileSync(path.join(web,'app.js'),'utf8'),context);
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 (async()=>{
