@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+radar_service/events.sqlite3*
+radar_service/service.log*
+radar_service/recordings/
+radar_service/filters.json.tmp

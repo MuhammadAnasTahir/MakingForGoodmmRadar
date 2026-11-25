@@ -1,0 +1,10 @@
+{
+  "enabled": false,
+  "roi": [
+    -2,
+    2,
+    0,
+    4
+  ],
+  "exclusions": []
+}
