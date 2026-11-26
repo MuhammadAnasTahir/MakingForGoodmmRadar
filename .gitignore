@@ -5,3 +5,5 @@ radar_service/events.sqlite3*
 radar_service/service.log*
 radar_service/recordings/
 radar_service/filters.json.tmp
+radar_log_*.csv
+service_console.log

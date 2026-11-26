@@ -193,6 +193,7 @@ function paintTargets() {
     card.append(head);
     const kv=node('dl',undefined,'kv');
     const pair=(k,v)=>kv.append(node('dt',t(k)),node('dd',v));
+    if(tr.posture) pair('k.posture',t('posture.'+tr.posture));
     pair('k.position',`X ${num(tr.x_m)} · Y ${num(tr.y_m)} · Z ${num(tr.z_m)} m`);
     pair('k.speed',num(Math.hypot(tr.vx_mps,tr.vy_mps,tr.vz_mps))+' m/s');
     pair('k.height',num(tr.height_max_m)+' m');

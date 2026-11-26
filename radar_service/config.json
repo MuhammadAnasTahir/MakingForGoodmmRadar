@@ -1,24 +1,28 @@
 {
-  "toolbox_root": "D:/download/radar_toolbox_4_30_00_06",
-  "cfg_path": "D:/download/radar_toolbox_4_30_00_06/source/ti/examples/Industrial_and_Personal_Electronics/People_Tracking/3D_People_Tracking/chirp_configs/AOP_6m_default.cfg",
+  "toolbox_root": "",
+  "cfg_path": "cfg/AOP_6m_default.cfg",
   "demo": "3D People Tracking",
-  "cli_port": "COM3",
+  "cli_port": "COM5",
   "data_port": "COM4",
   "data_baud": 921600,
   "http_port": 8765,
-  "expected_sensor_position": [1.6, 0, 15],
+  "expected_sensor_position": [
+    1.99,
+    0,
+    15
+  ],
   "fall": {
     "window_seconds": 2.5,
     "height_ratio": 0.6,
-    "confirm_seconds": 1.0,
-    "cooldown_seconds": 30,
+    "confirm_seconds": 2.5,
+    "cooldown_seconds": 5,
     "local_sound": true,
     "recovery_ratio": 0.85,
-    "recovery_seconds": 2.0,
+    "recovery_seconds": 1.5,
     "min_drop_m": 0.6,
-    "max_low_height_m": 0.7,
-    "fall_max_duration_s": 1.2,
-    "fall_min_speed_mps": 1.0,
+    "max_low_height_m": 0.85,
+    "fall_max_duration_s": 3.0,
+    "fall_min_speed_mps": 0.5,
     "floor_alert_s": 30,
     "safe_zones": [],
     "rise_ratio": 0.7,
@@ -26,9 +30,23 @@
     "reference_percentile": 0.8,
     "speed_span_s": 0.2,
     "median_frames": 3,
-    "track_timeout_s": 3.0
+    "track_timeout_s": 3.0,
+    "fall_end_fraction": 0.7,
+    "rule": "floor_drop",
+    "upright_height_m": 1.1,
+    "handoff_radius_m": 2.0,
+    "handoff_seconds": 3.0
   },
   "motion_filter": {
     "enabled": true
+  },
+  "room_limit": [
+    -2.0,
+    2.0,
+    0.3,
+    4.0
+  ],
+  "posture": {
+    "lying_height_m": 0.85
   }
 }

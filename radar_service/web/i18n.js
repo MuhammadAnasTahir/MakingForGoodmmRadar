@@ -94,6 +94,16 @@ zh: {
   'filters.loaded': '已读取当前后台设置', 'filters.loadFail': '读取失败，请刷新重试；未覆盖原设置',
   'filters.invalid': '请填写有效矩形：xmin,xmax,ymin,ymax', 'filters.saved': '保存成功，下一帧生效', 'filters.saveFail': '保存失败：{msg}',
   'motion.on': "30 秒没移动过的目标会被隐藏（通常是家具）。一直坐着不动的人也可能被隐藏。",
+  'k.posture': '姿态',
+  'posture.standing': '站立', 'posture.walking': '行走', 'posture.sitting': '坐下 / 弯腰', 'posture.lying': '躺下', 'posture.fallen': '摔倒',
+  'toast.posture': '目标 {id}：{p}',
+  'toast.fall': '检测到摔倒', 'toast.prolonged': '在地上停留太久', 'toast.alertSub': '目标 {id} · {time}', 'toast.ack': '确认已查看',
+  'sound.on': '声音：开', 'sound.off': '声音：关', 'sound.unlock': '点击页面任意位置以启用警报声音',
+  'rec.title': '测试录制', 'rec.idle': '未在录制', 'rec.active': '正在录制 {name} · {s} 秒', 'rec.saved': '已保存 {name}',
+  'rec.start': '开始录制', 'rec.stop': '停止并保存', 'rec.fail': '录制失败：{msg}', 'rec.action': '动作',
+  'rec.l.walk': '走动', 'rec.l.stand': '站着不动', 'rec.l.sit_down': '坐到椅子上', 'rec.l.stand_up': '从椅子站起', 'rec.l.bend': '弯腰捡东西',
+  'rec.l.lie_slow': '慢慢躺下再起来', 'rec.l.lie_stay': '慢慢躺下并停留', 'rec.l.fall': '模拟摔倒', 'rec.l.fall_get_up': '摔倒后起身走开',
+  'rec.l.two_people': '两个人', 'rec.l.offline': '拔掉雷达', 'rec.l.other': '其他',
   'motion.off': '运动历史过滤已关闭。'
 },
 en: {
@@ -189,6 +199,16 @@ en: {
   'filters.loaded': 'Loaded the current backend settings', 'filters.loadFail': 'Could not load; refresh to retry. Nothing was overwritten.',
   'filters.invalid': 'Enter valid rectangles: xmin,xmax,ymin,ymax', 'filters.saved': 'Saved; applies from the next frame', 'filters.saveFail': 'Save failed: {msg}',
   'motion.on': "Targets that haven't moved for 30 s are hidden (usually furniture). Someone sitting perfectly still may be hidden too.",
+  'k.posture': 'Posture',
+  'posture.standing': 'Standing', 'posture.walking': 'Walking', 'posture.sitting': 'Sitting / bending', 'posture.lying': 'Lying down', 'posture.fallen': 'Fallen',
+  'toast.posture': 'Person {id}: {p}',
+  'toast.fall': 'Fall detected', 'toast.prolonged': 'On the floor too long', 'toast.alertSub': 'Person {id} · {time}', 'toast.ack': 'Acknowledge',
+  'sound.on': 'Sound on', 'sound.off': 'Sound off', 'sound.unlock': 'Click anywhere on the page to enable the alarm sound',
+  'rec.title': 'Test recording', 'rec.idle': 'Not recording', 'rec.active': 'Recording {name} · {s} s', 'rec.saved': 'Saved {name}',
+  'rec.start': 'Start recording', 'rec.stop': 'Stop and save', 'rec.fail': 'Recording failed: {msg}', 'rec.action': 'Action',
+  'rec.l.walk': 'Walk around', 'rec.l.stand': 'Stand still', 'rec.l.sit_down': 'Sit on chair', 'rec.l.stand_up': 'Stand up from chair', 'rec.l.bend': 'Bend and pick up',
+  'rec.l.lie_slow': 'Lie down slowly, get up', 'rec.l.lie_stay': 'Lie down slowly and stay', 'rec.l.fall': 'Mimic a fall', 'rec.l.fall_get_up': 'Fall, get up, walk away',
+  'rec.l.two_people': 'Two people', 'rec.l.offline': 'Unplug radar', 'rec.l.other': 'Other',
   'motion.off': 'Motion filter off.'
 }
 };

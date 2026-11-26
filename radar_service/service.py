@@ -77,6 +77,7 @@ FALL_DEFAULTS = dict(
     recovery_ratio=0.85,         # latch release: back to this share of reference ...
     recovery_seconds=2.0,        # ... for this long
     min_drop_m=0.6,              # big drop: reference - low height
+    fall_end_fraction=0.9,       # drop duration is timed from 10% to this share of the drop
     max_low_height_m=0.7,        # big drop: low height must be at most this
     fall_max_duration_s=1.2,     # fast drop: 10%->90% of the drop within this
     fall_min_speed_mps=1.0,      # fast drop: peak descent speed at least this
@@ -88,10 +89,13 @@ FALL_DEFAULTS = dict(
     speed_span_s=0.2,            # descent speed measured over spans of this length
     median_frames=3,             # median filter length on height_max_m
     track_timeout_s=3.0,         # keep detector state for a track missing this long
+    rule='drop_profile',         # 'drop_profile' (FallDetector) or 'floor_drop' (FloorDropDetector)
+    upright_height_m=1.1,        # floor_drop: at least this tall = upright (standing or on a chair)
+    handoff_radius_m=2.0,        # floor_drop: a new track this close to a just-lost one continues it
+    handoff_seconds=3.0,         # floor_drop: ... if it appears within this many seconds
 )
 ALERT_KINDS = ('fall', 'prolonged_low')
 MIN_REFERENCE_HISTORY_S = 1.0   # need this much history before trusting the reference height
-SETTLE_DROP_M = 0.08            # still descending if height fell more than this over the last ~0.3 s
 SETTLE_MAX_WAIT_S = 3.0         # wait at most this long after confirm_seconds for the drop to settle
 LOW_WINDOW_S = 0.5              # low height = median of the last 0.5 s
 
@@ -224,7 +228,7 @@ class FallDetector:
                 return
             if now - tr.t_cross < c['confirm_seconds']:
                 return
-            if self._still_descending(tr, now) and now - tr.t_cross < c['confirm_seconds'] + SETTLE_MAX_WAIT_S:
+            if not self._settled(tr, now) and now - tr.t_cross < c['confirm_seconds'] + SETTLE_MAX_WAIT_S:
                 return   # measure the drop only when it is complete (a slow lie-down is still moving)
             self._classify(tr, track, tid, now)
             if tr.state != 'pending':
@@ -237,7 +241,10 @@ class FallDetector:
                 return
             track['low_seconds'] = round(now - tr.t_cross, 1)
             if not tr.big:
-                # Staged descent (e.g. kneel, then lie down): judge again once the drop is big.
+                # Staged descent (e.g. kneel, then lie down): judge again once the drop is big
+                # and the person has stopped going down, so the whole descent is timed.
+                if not self._settled(tr, now):
+                    return
                 self._classify(tr, track, tid, now)
                 if tr.state != 'pending':
                     return
@@ -286,10 +293,11 @@ class FallDetector:
         if big:
             self._store('lie_down_rejected', track, tid, dict(feats, reason='safe_zone' if safe else 'slow'))
 
-    def _still_descending(self, tr, now):
-        earlier = [v for ts, v in tr.hist if now - 0.5 <= ts <= now - 0.3]
-        latest = [v for ts, v in tr.hist if ts >= now - 0.2]
-        return bool(earlier and latest) and _median(earlier) - _median(latest) > SETTLE_DROP_M
+    def _settled(self, tr, now):
+        """Height went down less than 0.1 m over the last second."""
+        earlier = [v for ts, v in tr.hist if now - 1.2 <= ts <= now - 0.8]
+        latest = [v for ts, v in tr.hist if ts >= now - 0.3]
+        return bool(earlier and latest) and _median(earlier) - _median(latest) < 0.1
 
     def _features(self, tr, now):
         c = self.config
@@ -298,7 +306,7 @@ class FallDetector:
         low = _median(recent)
         reference = tr.reference
         drop = reference - low
-        lvl10, lvl90 = reference - 0.1 * drop, reference - 0.9 * drop
+        lvl10, lvl90 = reference - 0.1 * drop, reference - c['fall_end_fraction'] * drop
         t10 = None
         for ts, v in pts:
             if ts > tr.t_cross:
@@ -347,6 +355,158 @@ class FallDetector:
             logging.info('Fall rule info %s track=%s %s', kind, tid, json.dumps(features))
 
 
+class _FloorTrack:
+    def __init__(self, median_frames):
+        self.raw = deque(maxlen=max(1, int(median_frames)))
+        self.hist = deque()           # (t, filtered height)
+        self.state = 'upright'        # upright -> low -> (alerted)
+        self.fast = False
+        self.low_since = None
+        self.features = None
+        self.blind_s = 0.0            # time the radar lost this person (handoff), not counted as falling
+        self.up_seen = False
+        self.x = self.y = 0.0
+        self.last_seen = 0.0
+        self.recovery_since = None
+
+
+class FloorDropDetector(FallDetector):
+    """Simple fall rule for the TI height output, which reads a person on the floor at 0.05-0.6 m.
+
+    Fall: from upright (>= upright_height_m) to the floor (<= max_low_height_m) within
+    fall_max_duration_s, then still on the floor confirm_seconds later. Slower descents only
+    alert after floor_alert_s (prolonged_low). When the radar loses a person and a new track
+    appears nearby shortly after, the new track continues the old one's history.
+    """
+    def __init__(self, config):
+        super().__init__(config)
+        self.floor = {}
+
+    def update(self, tracks, now):
+        c = self.config
+        active = {t['track_id'] for t in tracks}
+        for tid in [k for k, v in self.floor.items() if k not in active and now - v.last_seen > c['handoff_seconds'] + 5]:
+            del self.floor[tid]
+            self.latched.pop(tid, None)
+        for track in tracks:
+            tid = track['track_id']
+            tr = self.floor.get(tid)
+            if tr is None:
+                tr = self._handoff(track, active, now) or _FloorTrack(c['median_frames'])
+                self.floor[tid] = tr
+            tr.x, tr.y, tr.last_seen = track['x_m'], track['y_m'], now
+            self._step(track, tid, tr, now)
+
+    def _handoff(self, track, active, now):
+        c, best, best_d = self.config, None, None
+        for old, tr in self.floor.items():
+            if old in active or now - tr.last_seen > c['handoff_seconds']:
+                continue
+            d = math.hypot(track['x_m'] - tr.x, track['y_m'] - tr.y)
+            if d <= c['handoff_radius_m'] and (best_d is None or d < best_d):
+                best, best_d = old, d
+        if best is None:
+            return None
+        tr = self.floor.pop(best)
+        tr.blind_s += now - tr.last_seen
+        tr.raw.clear()
+        if best in self.latched:
+            self.latched[track['track_id']] = self.latched.pop(best)
+        if best in self.cooldown:
+            self.cooldown[track['track_id']] = self.cooldown[best]
+        logging.info('Track %s continues lost track %s (%.1f m, %.1f s)', track['track_id'], best, best_d, now - tr.last_seen)
+        return tr
+
+    def _step(self, track, tid, tr, now):
+        c = self.config
+        h = track.get('height_max_m')
+        track['fall_state'] = 'height_unavailable'
+        if h is None or not math.isfinite(h) or h <= 0:
+            return
+        tr.raw.append(h)
+        hf = _median(tr.raw)
+        tr.hist.append((now, hf))
+        while tr.hist and now - tr.hist[0][0] > 40:
+            tr.hist.popleft()
+        track['height_filtered_m'] = round(hf, 3)
+        up, low_m = c['upright_height_m'], c['max_low_height_m']
+        if hf >= up:
+            tr.up_seen = True
+        ups = [v for ts, v in tr.hist if v >= up and now - ts <= 8.0]   # recent upright heights only
+        if ups:
+            track['reference_m'] = round(_percentile(ups, 0.8), 3)
+
+        if tr.state == 'alerted':
+            track['fall_state'] = 'suspected_fall'
+            if hf >= up:
+                tr.recovery_since = tr.recovery_since or now
+                if now - tr.recovery_since >= c['recovery_seconds']:
+                    tr.state, tr.recovery_since, tr.blind_s = 'upright', None, 0.0
+                    self.latched.pop(tid, None)
+                    track['fall_state'] = 'tracking'
+                    logging.info('Fall detector rearmed: track=%s', tid)
+            else:
+                tr.recovery_since = None
+            return
+
+        if tr.state == 'upright':
+            track['fall_state'] = 'tracking'
+            if hf > low_m:
+                return
+            tr.state, tr.low_since = 'low', now
+            if not ups:
+                tr.fast, tr.features = False, None     # never seen upright: no drop to judge
+            else:
+                # Time the whole descent: from leaving the person's usual upright height to the floor.
+                h_up = _percentile(ups, 0.8)
+                start_level = max(up, h_up - 0.15)
+                t_up = next((ts for ts, v in reversed(tr.hist) if v >= start_level), None)
+                if t_up is None:
+                    t_up = next(ts for ts, v in reversed(tr.hist) if v >= up)
+                duration = max(0.0, now - t_up - tr.blind_s)
+                tr.fast = duration <= c['fall_max_duration_s']
+                tr.features = dict(drop_m=round(h_up - hf, 3), duration_s=round(duration, 2),
+                                   low_h_m=round(hf, 3), reference_m=round(h_up, 3), radar_lost_s=round(tr.blind_s, 1))
+                if not tr.fast:
+                    self._store('lie_down_rejected', track, tid, dict(tr.features, reason='slow'))
+
+        # state == 'low'
+        safe = self._in_safe_zone(tr)
+        track['fall_state'] = 'suspected_fall' if tr.fast and not safe else 'low'
+        track['low_seconds'] = round(now - tr.low_since, 1)
+        if tr.features:
+            track['fall_check'] = tr.features
+        if hf >= low_m + 0.25:                     # got up again
+            if tr.fast and now - tr.low_since < c['confirm_seconds']:
+                lows = [v for ts, v in tr.hist if ts >= tr.low_since]
+                self._store('crouch_rejected', track, tid, dict(tr.features, low_h_m=round(min(lows), 3)))
+            tr.state, tr.fast, tr.features, tr.blind_s = 'upright', False, None, 0.0
+            track['fall_state'] = 'tracking'
+            track.pop('low_seconds', None)
+            track.pop('fall_check', None)
+            return
+        if safe:
+            return
+        kind = None
+        if tr.fast and now - tr.low_since >= c['confirm_seconds']:
+            kind = 'fall'
+        elif tr.up_seen and now - tr.low_since >= c['floor_alert_s']:
+            kind = 'prolonged_low'
+        if kind is None or now < self.cooldown.get(tid, 0):
+            return
+        if kind == 'prolonged_low':
+            tr.features = dict(tr.features or {}, low_duration_s=round(now - tr.low_since, 1), low_h_m=round(hf, 3))
+        self._store(kind, track, tid, tr.features)
+        self.cooldown[tid] = now + c['cooldown_seconds']
+        self.latched[tid] = dict(kind=kind)
+        tr.state, tr.recovery_since = 'alerted', None
+        track['fall_state'] = 'suspected_fall'
+        logging.warning('SUSPECTED %s track=%s %s: inspect and acknowledge on the local page', kind.upper(), tid, json.dumps(tr.features))
+        if c.get('local_sound') and sys.platform == 'win32':
+            import winsound
+            winsound.PlaySound('SystemExclamation', winsound.SND_ALIAS | winsound.SND_ASYNC)
+
+
 def packets(port):
     buffer = bytearray()
     last_packet = time.monotonic()
@@ -372,6 +532,17 @@ def packets(port):
             yield packet
         if time.monotonic() - last_packet > 6:
             raise TimeoutError('No complete radar frame for 6 seconds; check power, mode, ports and CFG')
+
+
+def already_streaming(port, seconds=2.0):
+    """True if radar frames are arriving on the data port."""
+    deadline, seen = time.monotonic() + seconds, bytearray()
+    while time.monotonic() < deadline:
+        seen.extend(port.read(port.in_waiting or 1))
+        if MAGIC in seen:
+            return True
+        seen[:] = seen[-7:]
+    return False
 
 
 def send_config(port, path):
@@ -422,6 +593,197 @@ class MotionClassifier:
         return visible
 
 
+POSTURE_DEFAULTS = dict(
+    window_s=300.0,          # standing reference: this much history per person
+    percentile=0.9,          # reference = this percentile of the person's heights (their own standing height)
+    min_history_s=2.0,       # need this much history before judging sitting vs. standing
+    upright_ratio=0.8,       # at least this share of the reference -> standing / walking
+    lying_height_m=0.75,     # at most this height (m) -> lying / on the floor
+    walk_speed_mps=0.35,     # moved at least this fast over the last second -> walking
+    hold_s=0.6,              # a new posture must hold this long before it is shown
+    walk_hold_s=1.0,         # standing <-> walking must hold this long (avoids flicker)
+)
+POSTURES = ('standing', 'walking', 'sitting', 'lying', 'fallen')
+
+
+class PostureTracker:
+    """Display label per person from height relative to their own standing height and speed.
+
+    For the page only; the fall alerts come from FallDetector. Works for any visitor height
+    because sitting is judged as a share of that person's own reference height.
+    """
+    def __init__(self, config=None):
+        self.config = dict(POSTURE_DEFAULTS, **(config or {}))
+        self.tracks = {}
+
+    def update(self, tracks, now, latched=()):
+        c = self.config
+        for tid in [k for k, v in self.tracks.items() if now - v['seen'] > 5.0]:
+            del self.tracks[tid]
+        for track in tracks:
+            tid = track['track_id']
+            st = self.tracks.setdefault(tid, dict(hist=deque(), pos=deque(), shown=None, cand=None, since=now, seen=now))
+            st['seen'] = now
+            h = track.get('height_filtered_m', track.get('height_max_m'))
+            valid = h is not None and math.isfinite(h) and h > 0
+            if valid:
+                st['hist'].append((now, h))
+            while st['hist'] and now - st['hist'][0][0] > c['window_s']:
+                st['hist'].popleft()
+            st['pos'].append((now, track['x_m'], track['y_m']))
+            while st['pos'] and now - st['pos'][0][0] > 1.0:
+                st['pos'].popleft()
+            t0, x0, y0 = st['pos'][0]
+            speed = math.hypot(track['x_m'] - x0, track['y_m'] - y0) / (now - t0) if now - t0 >= 0.5 else 0.0
+            ref = None
+            if st['hist'] and now - st['hist'][0][0] >= c['min_history_s']:
+                ref = _percentile([v for _, v in st['hist']], c['percentile'])
+            if tid in latched:
+                raw = 'fallen'
+            elif not valid or ref is None:
+                raw = st['shown'] or ('walking' if speed >= c['walk_speed_mps'] else 'standing')
+            elif h <= c['lying_height_m']:
+                raw = 'lying'
+            elif h < c['upright_ratio'] * ref:
+                raw = 'sitting'
+            else:
+                raw = 'walking' if speed >= c['walk_speed_mps'] else 'standing'
+            if st['shown'] is None or raw == 'fallen':
+                st['shown'], st['cand'] = raw, None
+            elif raw == st['shown']:
+                st['cand'] = None
+            elif raw != st['cand']:
+                st['cand'], st['since'] = raw, now
+            else:
+                hold = c['walk_hold_s'] if {raw, st['shown']} == {'standing', 'walking'} else c['hold_s']
+                if now - st['since'] >= hold:
+                    st['shown'], st['cand'] = raw, None
+            track['posture'] = st['shown']
+            if ref:
+                track['posture_reference_m'] = round(ref, 3)
+            track['walk_speed_mps'] = round(speed, 2)
+
+
+def limit_room(tracks, box):
+    """Drop tracks outside the fixed room limit (removes ghost targets far from the radar)."""
+    if not box:
+        return tracks
+    return [t for t in tracks if box[0] <= t['x_m'] <= box[1] and box[2] <= t['y_m'] <= box[3]]
+
+
+# ---------------------------------------------------------------- labelled test recordings
+RECORD_LABELS = ('walk', 'stand', 'sit_down', 'stand_up', 'bend', 'lie_slow', 'lie_stay', 'fall',
+                 'fall_get_up', 'two_people', 'offline', 'other')
+RECORD_MAX_S = 300.0
+RECORD_LOCK = threading.Lock()
+RECORDING = {}
+
+
+def _record_status_locked():
+    if not RECORDING:
+        return dict(active=False, labels=list(RECORD_LABELS), last=RECORDING_LAST.get('name'))
+    return dict(active=True, labels=list(RECORD_LABELS), name=RECORDING['name'], label=RECORDING['label'],
+                seconds=round(time.time() - RECORDING['started'], 1), frames=RECORDING['frames'],
+                last=RECORDING_LAST.get('name'))
+
+
+RECORDING_LAST = {}
+
+
+def record_status():
+    with RECORD_LOCK:
+        return _record_status_locked()
+
+
+def start_recording(label):
+    if label not in RECORD_LABELS:
+        raise ValueError('Unknown label: ' + str(label))
+    with RECORD_LOCK:
+        if RECORDING:
+            _stop_recording_locked()
+        folder = ROOT / 'recordings'
+        folder.mkdir(exist_ok=True)
+        numbers = [int(p.stem.rsplit('_', 1)[1]) for p in folder.glob(label + '_*.jsonl')
+                   if p.stem.rsplit('_', 1)[1].isdigit() and p.stem.rsplit('_', 1)[0] == label]
+        name = '%s_%02d' % (label, max(numbers, default=0) + 1)
+        handle = (folder / (name + '.jsonl')).open('w', encoding='utf-8')
+        started = time.time()
+        handle.write(json.dumps(dict(type='start', label=label, name=name, started_at=started,
+                                     started_local=time.strftime('%Y-%m-%d %H:%M:%S'),
+                                     fall=PUBLIC_INFO.get('fall'), room_limit=PUBLIC_INFO.get('room_limit'))) + '\n')
+        RECORDING.update(label=label, name=name, handle=handle, started=started, frames=0,
+                         last_posture={}, changes=[], track_ids=set())
+        logging.info('Recording started: %s', name)
+        return _record_status_locked()
+
+
+def record_frame(tracks, extra):
+    with RECORD_LOCK:
+        if not RECORDING:
+            return
+        t = round(time.time() - RECORDING['started'], 3)
+        keep = ('track_id', 'x_m', 'y_m', 'z_m', 'vx_mps', 'vy_mps', 'vz_mps', 'height_max_m', 'height_filtered_m',
+                'reference_m', 'fall_state', 'low_seconds', 'posture', 'posture_reference_m', 'walk_speed_mps',
+                'height_pts_m', 'points_near')
+        rows = [{k: tr[k] for k in keep if k in tr} for tr in tracks]
+        RECORDING['handle'].write(json.dumps(dict(type='frame', t=t, tracks=rows, **extra)) + '\n')
+        RECORDING['frames'] += 1
+        for tr in tracks:
+            RECORDING['track_ids'].add(tr['track_id'])
+            p = tr.get('posture')
+            if p and RECORDING['last_posture'].get(tr['track_id']) != p:
+                RECORDING['last_posture'][tr['track_id']] = p
+                RECORDING['changes'].append([t, tr['track_id'], p])
+        if t > RECORD_MAX_S:
+            _stop_recording_locked()
+
+
+def stop_recording():
+    with RECORD_LOCK:
+        if RECORDING:
+            _stop_recording_locked()
+        return _record_status_locked()
+
+
+def _stop_recording_locked():
+    rec = dict(RECORDING)
+    RECORDING.clear()
+    ended = time.time()
+    try:
+        with database() as db:
+            rows = db.execute('SELECT id,timestamp,track_id,kind,details FROM events WHERE timestamp>=? ORDER BY id',
+                              (rec['started'],)).fetchall()
+        evs = [dict(id=r[0], t=round(r[1] - rec['started'], 2), track_id=r[2], kind=r[3], details=json.loads(r[4])) for r in rows]
+    except Exception as exc:   # the recording must still close cleanly
+        evs = [dict(error=str(exc))]
+    summary = dict(type='summary', label=rec['label'], name=rec['name'], duration_s=round(ended - rec['started'], 1),
+                   frames=rec['frames'], track_ids=sorted(rec['track_ids']), posture_changes=rec['changes'],
+                   events=evs, alerts=[e.get('kind') for e in evs if e.get('kind') in ALERT_KINDS])
+    rec['handle'].write(json.dumps(summary) + '\n')
+    rec['handle'].close()
+    RECORDING_LAST.update(name=rec['name'], summary=summary)
+    logging.info('Recording saved: %s (%s frames, alerts %s)', rec['name'], rec['frames'], summary['alerts'])
+
+
+def point_heights(tracks, cloud, sensor_position, radius=0.6, min_points=3):
+    """Height of each person from the raw points near them (world metres above the floor).
+
+    The TI height output lags and freezes when a person lies still, so this measures the
+    top of the body directly from this frame's points. Sets height_pts_m / points_near.
+    """
+    h, _, tilt = sensor_position
+    c, s = math.cos(math.radians(tilt)), math.sin(math.radians(tilt))
+    world = []
+    for row in cloud:
+        xs, ys, zs = row[0], row[1], row[2]
+        world.append((xs, ys * c + zs * s, h + zs * c - ys * s))
+    for track in tracks:
+        zs = sorted(z for x, y, z in world
+                    if (x - track['x_m']) ** 2 + (y - track['y_m']) ** 2 <= radius * radius and -0.3 <= z <= 2.6)
+        track['points_near'] = len(zs)
+        track['height_pts_m'] = round(zs[int(0.9 * (len(zs) - 1))], 3) if len(zs) >= min_points else None
+
+
 def prepare_points(frame):
     points = []
     cloud = frame.get('pointCloud', [])
@@ -437,15 +799,22 @@ def prepare_points(frame):
 def radar_worker(config, parse_frame):
     import serial
     while not STOP.is_set():
-        detector = FallDetector(config['fall'])
+        detector = (FloorDropDetector if config['fall'].get('rule') == 'floor_drop' else FallDetector)(config['fall'])
         classifier = MotionClassifier()
+        posture = PostureTracker(config.get('posture'))
         try:
             with LOCK:
                 STATE.update(status='configuring', tracks=[], points=[], last_frame_at=None, error=None)
             with serial.Serial(config['cli_port'], 115200, timeout=0.15, write_timeout=2) as cli:
                 with serial.Serial(config['data_port'], config['data_baud'], timeout=0.2) as data:
                     data.reset_input_buffer()
-                    send_config(cli, Path(config['cfg_path']))
+                    # The radar accepts its cfg once per power-up, and resending it to a running radar
+                    # stops it. If frames are already arriving (backend restarted), keep the radar as is.
+                    if already_streaming(data):
+                        logging.warning('Radar was already running; using its current configuration. '
+                                        'Replug the radar to apply changes to the .cfg file.')
+                    else:
+                        send_config(cli, Path(config['cfg_path']))
                     for packet in packets(data):
                         frame = parse_frame(packet, config['demo'])
                         if frame.get('error'):
@@ -466,11 +835,14 @@ def radar_worker(config, parse_frame):
                         raw_count = len(tracks)
                         with FILTER_LOCK:
                             settings = dict(FILTERS)
-                        tracks = filter_tracks(tracks, settings)
+                        tracks = filter_tracks(limit_room(tracks, config.get('room_limit')), settings)
                         region_count = len(tracks)
                         now = time.monotonic()
                         tracks = classifier.update(tracks, now) if config.get('motion_filter', {}).get('enabled', True) else tracks
+                        point_heights(tracks, frame.get('pointCloud', []), config.get('expected_sensor_position') or [0, 0, 0])
                         detector.update(tracks, now)
+                        posture.update(tracks, now, detector.latched)
+                        record_frame(tracks, dict(frame=int(frame.get('frameNum', 0)), raw_count=raw_count))
                         points, point_count = prepare_points(frame)
                         with LOCK:
                             STATE.update(status='streaming', tracks=tracks, last_frame_at=time.time(),
@@ -520,6 +892,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json([dict(id=r[0], timestamp=r[1], track_id=r[2], acknowledged=bool(r[3]), details=json.loads(r[4]), kind=r[5]) for r in rows])
         if self.path == '/api/info':
             return self.send_json(PUBLIC_INFO)
+        if self.path == '/api/record':
+            return self.send_json(record_status())
         # Serve only web/. Never expose config, logs, database, or Python source.
         path = unquote(urlsplit(self.path).path)
         relative = 'index.html' if path == '/' else path.lstrip('/')
@@ -556,6 +930,21 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({'saved': True, 'filters': settings})
             except (ValueError, TypeError, OSError) as exc:
                 return self.send_json({'error': str(exc)}, 400)
+        if self.path == '/api/record':
+            if self.headers.get('X-Radar-Action') != 'record':
+                return self.send_json({'error': 'Missing action header'}, 403)
+            try:
+                size = int(self.headers.get('Content-Length', '0'))
+                if not 0 < size <= 1024:
+                    raise ValueError('Invalid request size')
+                body = json.loads(self.rfile.read(size))
+                if body.get('action') == 'start':
+                    return self.send_json(start_recording(body.get('label')))
+                if body.get('action') == 'stop':
+                    return self.send_json(stop_recording())
+                raise ValueError('action must be start or stop')
+            except (ValueError, TypeError, AttributeError, OSError) as exc:
+                return self.send_json({'error': str(exc)}, 400)
         # Bind to loopback; require a custom header to reject cross-site form submissions.
         if self.headers.get('X-Radar-Action') != 'ack':
             return self.send_json({'error': 'Missing action header'}, 403)
@@ -580,6 +969,8 @@ def load_fall_config(fall):
         merged['safe_zones'] = [validate_box(z) for z in zones]
     except ValueError as exc:
         raise ValueError('fall.safe_zones: ' + str(exc))
+    if not 0.2 <= merged['fall_end_fraction'] <= 0.95:
+        raise ValueError('fall.fall_end_fraction must be between 0.2 and 0.95')
     for key in ('min_drop_m', 'max_low_height_m', 'fall_max_duration_s', 'fall_min_speed_mps', 'floor_alert_s',
                 'reference_seconds', 'speed_span_s', 'confirm_seconds', 'cooldown_seconds'):
         value = merged[key]
@@ -606,16 +997,20 @@ def main():
     if (ROOT / 'filters.json').exists():
         FILTERS.update(validate_filters(json.loads((ROOT / 'filters.json').read_text(encoding='utf-8-sig'))))
     config['fall'] = load_fall_config(config.get('fall', {}))
-    PUBLIC_INFO.update(fall=config['fall'],motion_filter_enabled=config.get('motion_filter', {}).get('enabled', True), device='IWR6843AOP', vital_signs_available=False, posture_classification_available=False)
+    PUBLIC_INFO.update(fall=config['fall'],motion_filter_enabled=config.get('motion_filter', {}).get('enabled', True), device='IWR6843AOP', vital_signs_available=False, posture_classification_available=True, postures=list(POSTURES), room_limit=config.get('room_limit'))
     if config['cli_port'] == config['data_port']:
         raise ValueError('CLI and DATA ports must be different')
-    common = Path(config['toolbox_root']) / 'tools/visualizers/Applications_Visualizer/common'
-    if not (common / 'parseFrame.py').is_file():
-        raise FileNotFoundError('Check toolbox_root: ' + str(common))
+    cfg = Path(config['cfg_path'])
+    config['cfg_path'] = str(cfg if cfg.is_absolute() else ROOT / cfg)
     if not Path(config['cfg_path']).is_file():
         raise FileNotFoundError('Check cfg_path: ' + config['cfg_path'])
-    sys.path.insert(0, str(common))
-    from parseFrame import parseStandardFrame
+    common = Path(config['toolbox_root']) / 'tools/visualizers/Applications_Visualizer/common' if config.get('toolbox_root') else None
+    if common is not None and (common / 'parseFrame.py').is_file():
+        sys.path.insert(0, str(common))
+        from parseFrame import parseStandardFrame
+    else:
+        # No TI Toolbox installed: use the bundled parser.
+        from ti_parser import parse_frame as parseStandardFrame
     from logging.handlers import RotatingFileHandler
     logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler(), RotatingFileHandler(ROOT / 'service.log', maxBytes=2_000_000, backupCount=3, encoding='utf-8')])
     with database():

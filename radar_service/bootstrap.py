@@ -35,9 +35,10 @@ def main():
     for m in ['serial','numpy']:
         if importlib.util.find_spec(m) is None:
             raise SystemExit('Missing '+m+'. Use this Python: '+sys.executable+' -m pip install -r requirements.txt')
-    common=Path(c['toolbox_root'])/'tools/visualizers/Applications_Visualizer/common/parseFrame.py'
-    if not common.is_file(): raise SystemExit('TI parser missing. Correct toolbox_root in config.json: '+str(common))
+    common=Path(c['toolbox_root'])/'tools/visualizers/Applications_Visualizer/common/parseFrame.py' if c.get('toolbox_root') else None
+    if common is None or not common.is_file(): print('TI Toolbox parser not found; using bundled ti_parser.py',flush=True)
     p=Path(c['cfg_path'])
+    if not p.is_absolute(): p=root/p
     if not p.is_file(): raise SystemExit('CFG missing: '+str(p))
     text=p.read_text(encoding='utf-8-sig')
     for line in text.splitlines():

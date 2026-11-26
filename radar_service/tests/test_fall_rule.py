@@ -145,6 +145,22 @@ class FallRuleTests(unittest.TestCase):
                                   height_max_m=h, height_min_m=0)], i / RATE)
         self.assertEqual(self.alerts(), ['fall'])
 
+    def test_demo_config_catches_falls_up_to_3_seconds(self):
+        shipped = json.loads((Path(gateway.__file__).parent / 'config.json').read_text(encoding='utf-8-sig'))['fall']
+        shipped = dict(shipped, rule='drop_profile', fall_max_duration_s=3.0, fall_min_speed_mps=0.5, confirm_seconds=3.0,
+                       max_low_height_m=0.85, fall_end_fraction=0.7)   # the earlier demo tuning of this rule
+        cases = [(profile([(6, STAND), (0.6, 0.3), (10, 0.3)]), ['fall']),             # fast fall
+                 (profile([(6, STAND), (2.5, 0.3), (10, 0.3)]), ['fall']),             # slow fall, 2.5 s
+                 (profile([(6, STAND), (2, 1.0), (2, 1.0), (3, 0.3), (10, 0.3), (3, STAND)]), []),  # kneel, pause, lie down
+                 (profile([(6, STAND), (1, 1.25), (20, 1.25), (1, STAND), (5, STAND)]), []),       # sit on a chair
+                 (profile([(6, STAND), (0.8, 0.55), (1.8, 0.55), (0.8, STAND), (5, STAND)]), []),  # bend to pick up a charger
+                 (profile([(6, 1.22), (1.2, 0.56), (1.5, 0.56), (1, 1.22), (5, 1.22)]), [])]       # seated, reach to the floor
+        for i, (heights, expected) in enumerate(cases):
+            gateway.ROOT = Path(self.tmp.name) / ('demo-%d' % i)
+            gateway.ROOT.mkdir()
+            self.run_profile(heights, **dict(shipped, local_sound=False))
+            self.assertEqual(self.alerts(), expected, 'case %d' % i)
+
     # ------------------------------------------------------------------ config, database, API
     def test_fall_config_defaults_and_validation(self):
         merged = gateway.load_fall_config(dict(window_seconds=2.5, height_ratio=0.6))
@@ -159,7 +175,13 @@ class FallRuleTests(unittest.TestCase):
         config = json.loads((Path(gateway.__file__).parent / 'config.json').read_text(encoding='utf-8-sig'))
         shipped = gateway.load_fall_config(config['fall'])
         self.assertEqual(shipped['floor_alert_s'], 30)
-        self.assertEqual(config['expected_sensor_position'], [1.6, 0, 15])
+        # The shipped config must describe the same mounting as the bundled TI cfg.
+        cfg = Path(gateway.__file__).parent / config['cfg_path']
+        if cfg.is_file():
+            import sys
+            sys.path.insert(0, str(Path(gateway.__file__).parent))
+            import bootstrap
+            self.assertEqual(bootstrap.check_sensor_position(cfg.read_text(encoding='utf-8-sig'), config['expected_sensor_position']), [])
 
     def test_old_database_is_migrated(self):
         path = gateway.ROOT / 'events.sqlite3'
