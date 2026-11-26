@@ -31,99 +31,106 @@ window.onerror=function(m,s,l){var e=document.getElementById("bootError");if(e){
 <!-- Shown until app.js finishes starting, so a broken page never looks like a quiet room. Bilingual because i18n.js may be the part that failed. -->
 <div id="bootError" class="boot-error" role="alert"><b lang="zh-CN">页面脚本没有加载成功，数据不会更新。请按 Ctrl+F5 刷新；如果还不行，检查后台窗口是否在运行。</b> <b lang="en">The page script did not load, so nothing here will update. Press Ctrl+F5; if that does not help, check that the backend window is running.</b><small></small></div>
 
-<header class="topbar">
+<header class="appbar">
   <a class="brand" href="#monitor">
     <svg class="brand-mark" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M10 17.5 3.4 6.9a12 12 0 0 1 13.2 0Z"/><path d="M6.6 12a6 6 0 0 1 6.8 0"/></svg>
     <span class="brand-name">RadarSense</span>
   </a>
-  <nav class="topnav" data-i18n-aria="nav.label" aria-label="页面导航">
-    <a href="#monitor"><svg class="icon"><use href="#i-map-2"/></svg><span data-i18n="nav.monitor">实时监测</span></a>
-    <a href="#eventSection"><svg class="icon"><use href="#i-list-details"/></svg><span data-i18n="nav.events">报警记录</span></a>
-    <a href="#settings"><svg class="icon"><use href="#i-adjustments-horizontal"/></svg><span data-i18n="nav.settings">设置</span></a>
+  <span class="appbar-sep" aria-hidden="true"></span>
+  <h1 id="title" class="room-name"></h1>
+  <nav class="appnav" data-i18n-aria="nav.label" aria-label="页面导航">
+    <a href="#monitor" data-i18n="nav.monitor">实时监测</a>
+    <a href="#eventSection" data-i18n="nav.events">提醒记录</a>
+    <a href="#settings" data-i18n="nav.settings">设置</a>
   </nav>
-  <div class="topbar-right">
-    <span id="connection" class="status-pill is-wait" role="status"></span>
+  <div class="appbar-right">
+    <span id="connection" class="link-state is-wait" role="status"></span>
     <span id="clock" class="clock"></span>
     <button id="themeToggle" type="button" class="icon-btn" data-i18n-aria="theme.label" data-i18n-title="theme.label" aria-label="切换深色/浅色" title="切换深色/浅色">
       <svg class="icon icon-moon"><use href="#i-moon"/></svg><svg class="icon icon-sun"><use href="#i-sun"/></svg>
     </button>
-    <div class="segmented lang-toggle" role="group" data-i18n-aria="lang.label" aria-label="语言">
+    <div class="switch lang-toggle" role="group" data-i18n-aria="lang.label" aria-label="语言">
       <button id="langZh" type="button" class="active" aria-pressed="true" lang="zh-CN">中文</button>
       <button id="langEn" type="button" aria-pressed="false" lang="en">EN</button>
     </div>
   </div>
 </header>
 
-<main class="page">
-  <section id="monitor" class="monitor">
-    <div class="page-head">
-      <h1 id="title" class="page-title"></h1>
-      <p id="sourceNote" class="source-note"></p>
-    </div>
+<!-- Annunciator: the room's state in one sentence, most urgent first. -->
+<div id="roomStatus" class="banner is-wait" role="status" aria-live="polite">
+  <svg class="banner-icon ic-ok"><use href="#i-circle-check"/></svg>
+  <svg class="banner-icon ic-alert"><use href="#i-alert-triangle"/></svg>
+  <svg class="banner-icon ic-off"><use href="#i-wifi-off"/></svg>
+  <div class="banner-text"><b id="bannerTitle"></b><span id="bannerSub"></span></div>
+  <a id="bannerAction" class="btn btn-primary" href="#eventSection" hidden data-i18n="banner.go">查看提醒</a>
+</div>
 
-    <!-- The room's state in one sentence: what a carer needs first. -->
-    <div id="roomStatus" class="banner is-wait" role="status" aria-live="polite">
-      <svg class="banner-icon ic-ok"><use href="#i-circle-check"/></svg>
-      <svg class="banner-icon ic-alert"><use href="#i-alert-triangle"/></svg>
-      <svg class="banner-icon ic-off"><use href="#i-wifi-off"/></svg>
-      <div class="banner-text"><b id="bannerTitle"></b><span id="bannerSub"></span></div>
-      <a id="bannerAction" class="btn btn-primary" href="#eventSection" hidden data-i18n="banner.go">查看提醒</a>
-    </div>
-
-    <div class="grid">
-      <section class="card">
-        <header class="card-head">
-          <h2 data-i18n="map.title">房间地图</h2>
-          <div class="segmented" role="tablist">
-            <button id="sceneTab" type="button" role="tab" class="rtab active" aria-selected="true" data-i18n="map.tabMap">坐标图</button>
-            <button id="cloudTab" type="button" role="tab" class="rtab" aria-selected="false" data-i18n="map.tabCloud">点云</button>
-          </div>
-        </header>
-        <div class="card-body map-body">
-          <div class="live-stage">
-            <img id="roomScene" src="assets/scene-activity.png" alt="房间示意素材，非实际测量布局" data-i18n-alt="map.sceneAlt" hidden>
-            <canvas id="radarCanvas" aria-label="实时目标与雷达点云" data-i18n-aria="map.canvasAria"></canvas>
-          </div>
-          <p id="plotNote" class="note"></p>
+<main class="console">
+  <div id="monitor" class="monitor">
+    <div class="main-col">
+    <!-- The room map is the centrepiece: a framed screen; everything else sits around it. -->
+    <section class="viz" aria-labelledby="mapTitle">
+      <div class="bar">
+        <h2 id="mapTitle" class="label" data-i18n="map.title">房间地图</h2>
+        <span id="sourceNote" class="bar-note"></span>
+        <div class="switch" role="tablist">
+          <button id="sceneTab" type="button" role="tab" class="active" aria-selected="true" data-i18n="map.tabMap">坐标图</button>
+          <button id="cloudTab" type="button" role="tab" aria-selected="false" data-i18n="map.tabCloud">点云</button>
         </div>
-      </section>
-
-      <section class="card">
-        <header class="card-head">
-          <h2><svg class="icon"><use href="#i-users"/></svg><span data-i18n="targets.title">视野内的人</span></h2>
-          <span id="targetCount" class="count">—</span>
-        </header>
-        <div class="card-body">
-          <div id="targets" aria-live="polite"></div>
-          <p class="note" data-i18n="targets.note">高度是雷达对整个人的估计，不是头顶高度。</p>
-        </div>
-      </section>
-    </div>
-  </section>
-
-  <section id="eventSection" class="card">
-    <header class="card-head">
-      <h2><svg class="icon"><use href="#i-list-details"/></svg><span data-i18n="events.title">提醒记录</span><span id="alertCount" class="count">—</span></h2>
-      <div class="segmented" role="group" data-i18n-aria="events.filterLabel" aria-label="记录筛选">
-        <button id="evAll" type="button" class="rtab active" aria-pressed="true" data-i18n="events.all">全部</button>
-        <button id="evAlerts" type="button" class="rtab" aria-pressed="false" data-i18n="events.alerts">提醒</button>
-        <button id="evInfo" type="button" class="rtab" aria-pressed="false" data-i18n="events.info">已排除</button>
       </div>
-    </header>
-    <div class="ev-head" aria-hidden="true">
-      <span data-i18n="col.time">时间</span><span data-i18n="col.event">事件</span><span data-i18n="col.target">目标</span><span data-i18n="col.details">详情</span>
-    </div>
-    <div id="events" class="event-list" aria-live="polite"></div>
-    <details class="rule-box">
-      <summary data-i18n="rule.summary">提醒是怎么判断的？</summary>
-      <div id="fallRule" class="rule"></div>
-      <p class="note rule-foot" data-i18n="events.meta">点“确认已查看”只表示有人看过，不代表确实摔倒了。</p>
-    </details>
-  </section>
+      <div class="live-stage">
+        <img id="roomScene" src="assets/scene-activity.png" alt="房间示意素材，非实际测量布局" data-i18n-alt="map.sceneAlt" hidden>
+        <canvas id="radarCanvas" aria-label="实时目标与雷达点云" data-i18n-aria="map.canvasAria"></canvas>
+      </div>
+      <ul class="legend" aria-hidden="true">
+        <li><i class="key key-track"></i><span data-i18n="state.tracking">跟踪中</span></li>
+        <li><i class="key key-low"></i><span data-i18n="state.low">低位（未报警）</span></li>
+        <li><i class="key key-crit"></i><span data-i18n="state.suspected">疑似跌倒</span></li>
+        <li><i class="key key-safe"></i><span data-i18n="canvas.safe">安全区</span></li>
+        <li><i class="key key-excl"></i><span data-i18n="canvas.excluded">排除</span></li>
+        <li><i class="key key-trail"></i><span data-i18n="map.trail">轨迹：最近 6 秒</span></li>
+        <li><i class="key key-vector"></i><span data-i18n="map.vector">箭头：1 秒后的位置</span></li>
+        <li><i class="key key-ring"></i><span data-i18n="map.rings">圆弧：到雷达的距离</span></li>
+      </ul>
+      <p id="plotNote" class="caption"></p>
+    </section>
 
-  <div id="settings" class="settings-grid">
-    <details class="card">
-      <summary><span data-i18n="settings.title">显示</span><span class="summary-hint" data-i18n="settings.hint">保存在当前浏览器</span></summary>
+    <section id="eventSection" class="log" aria-labelledby="logTitle">
+      <div class="bar">
+        <h2 id="logTitle" class="label" data-i18n="events.title">提醒记录</h2>
+        <span id="alertCount" class="count">—</span>
+        <div class="switch" role="group" data-i18n-aria="events.filterLabel" aria-label="记录筛选">
+          <button id="evAll" type="button" class="active" aria-pressed="true" data-i18n="events.all">全部</button>
+          <button id="evAlerts" type="button" aria-pressed="false" data-i18n="events.alerts">提醒</button>
+          <button id="evInfo" type="button" aria-pressed="false" data-i18n="events.info">已排除</button>
+        </div>
+      </div>
+      <div class="ev-head" aria-hidden="true">
+        <span data-i18n="col.time">时间</span><span data-i18n="col.event">事件</span><span data-i18n="col.target">目标</span><span data-i18n="col.details">详情</span>
+      </div>
+      <div id="events" class="event-list" aria-live="polite"></div>
+      <details class="rule-box">
+        <summary data-i18n="rule.summary">提醒是怎么判断的？</summary>
+        <div id="fallRule" class="rule"></div>
+        <p class="caption rule-foot" data-i18n="events.meta">点“确认已查看”只表示有人看过，不代表确实摔倒了。</p>
+      </details>
+    </section>
+    </div>
+
+    <aside class="people" aria-labelledby="peopleTitle">
+      <div class="bar">
+        <h2 id="peopleTitle" class="label" data-i18n="targets.title">视野内的人</h2>
+        <span id="targetCount" class="count">—</span>
+      </div>
+      <div id="targets" aria-live="polite"></div>
+      <p class="caption" data-i18n="targets.note">高度是雷达对整个人的估计，不是头顶高度。</p>
+    </aside>
+  </div>
+
+
+  <div id="settings" class="settings">
+    <details class="setting">
+      <summary><span class="label" data-i18n="settings.title">显示</span><span class="summary-hint" data-i18n="settings.hint">保存在当前浏览器</span></summary>
       <form id="appearanceForm" class="form">
         <div class="form-grid">
           <label class="span-2"><span data-i18n="form.roomName">房间名称</span><input id="roomName" maxlength="60" required></label>
@@ -141,7 +148,7 @@ window.onerror=function(m,s,l){var e=document.getElementById("bootError");if(e){
           <label><span data-i18n="form.ymin">坐标图 Y 最小（米）</span><input id="mapYmin" type="number" step="0.1" required></label>
           <label><span data-i18n="form.ymax">坐标图 Y 最大（米）</span><input id="mapYmax" type="number" step="0.1" required></label>
         </div>
-        <p class="note" data-i18n="settings.note">这里只改变坐标图显示的范围，不影响检测。</p>
+        <p class="caption" data-i18n="settings.note">这里只改变坐标图显示的范围，不影响检测。</p>
         <div class="form-actions">
           <button type="submit" class="btn btn-primary" data-i18n="btn.saveAppearance">保存</button>
           <button type="button" id="resetAppearance" class="btn" data-i18n="btn.reset">恢复默认</button>
@@ -150,10 +157,10 @@ window.onerror=function(m,s,l){var e=document.getElementById("bootError");if(e){
       </form>
     </details>
 
-    <details id="filters" class="card">
-      <summary><span data-i18n="filters.title">检测区域</span><span class="summary-hint" data-i18n="filters.hint">保存到后台</span></summary>
+    <details id="filters" class="setting">
+      <summary><span class="label" data-i18n="filters.title">检测区域</span><span class="summary-hint" data-i18n="filters.hint">保存到后台</span></summary>
       <form id="filterForm" class="form">
-        <p class="note first" data-i18n="filters.note">忽略区域里的人不会被检测跌倒，别把有人坐卧的地方划进去。床请在 config.json 的 safe_zones 里设置。</p>
+        <p class="caption first" data-i18n="filters.note">忽略区域里的人不会被检测跌倒，别把有人坐卧的地方划进去。床请在 config.json 的 safe_zones 里设置。</p>
         <label class="check"><input id="filterEnabled" type="checkbox"><span data-i18n="filters.enable">启用区域过滤</span></label>
         <div class="form-grid">
           <label><span data-i18n="filters.x0">X 最小</span><input id="fx0" type="number" step="0.1" required></label>
@@ -166,14 +173,14 @@ window.onerror=function(m,s,l){var e=document.getElementById("bootError");if(e){
           <button type="submit" id="saveFilters" class="btn btn-primary" disabled data-i18n="filters.save">保存并应用</button>
           <span id="filterMessage" class="form-msg" role="status"></span>
         </div>
-        <p id="motionNote" class="note"></p>
+        <p id="motionNote" class="caption"></p>
       </form>
     </details>
   </div>
 
-  <!-- Diagnostics for whoever maintains the radar; not needed for day-to-day watching. -->
+  <!-- Diagnostics for whoever maintains the radar. -->
   <footer class="system">
-    <span class="system-title" data-i18n="system.title">系统</span>
+    <span class="label" data-i18n="system.title">系统</span>
     <span><span data-i18n="kpi.frame">帧号</span> <b id="frame">—</b></span>
     <span><span data-i18n="kpi.age">数据延迟</span> <b id="age">—</b></span>
     <span id="diagnostics" role="status"></span>

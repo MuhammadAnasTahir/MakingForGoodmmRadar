@@ -25,10 +25,10 @@ try { const saved = localStorage.getItem(THEME_KEY); if (saved === 'light' || sa
 if (query.get('theme') === 'light' || query.get('theme') === 'dark') theme = query.get('theme');
 // Map colours per theme (the canvas cannot read CSS variables cheaply every frame).
 const PALETTES = {
-  light: {stage:'#ffffff',grid:'#e3e8ef',major:'#c5cdd8',edge:'#8f9bab',label:'#5f6b7a',text:'#182433',ok:'#1a7a45',warn:'#b26a00',alert:'#c4302b',accent:'#1f62c9',
-          excluded:'rgba(95,107,122,.14)',safe:'rgba(26,122,69,.08)',cloudL:45},
-  dark:  {stage:'#1f242b',grid:'#2f363f',major:'#434c57',edge:'#6e7781',label:'#9198a1',text:'#d1d7e0',ok:'#57ab5a',warn:'#c69026',alert:'#e5534b',accent:'#478be6',
-          excluded:'rgba(145,152,161,.14)',safe:'rgba(87,171,90,.10)',cloudL:62}
+  light: {stage:'#ffffff',grid:'#eef0f3',major:'#d9dee4',edge:'#9aa3ad',ring:'#c4cbd3',label:'#5e6873',text:'#15191e',ok:'#1d7a4c',warn:'#a85b07',alert:'#c0261e',accent:'#0b6f93',
+          excluded:'#5e6873',safe:'rgba(29,122,76,.07)',cloudL:40},
+  dark:  {stage:'#0f1215',grid:'#191e23',major:'#262d34',edge:'#5b646e',ring:'#38414a',label:'#8b949e',text:'#e3e7eb',ok:'#4bb37a',warn:'#e19a3c',alert:'#f0645a',accent:'#4fb3d9',
+          excluded:'#8b949e',safe:'rgba(75,179,122,.10)',cloudL:62}
 };
 let PALETTE = PALETTES[theme];
 function applyTheme() {
@@ -49,7 +49,7 @@ if (!scenes.includes(settings.scene)) settings.scene = defaults.scene;
 const validBounds = b => Array.isArray(b) && b.length===4 && b.every(Number.isFinite) && b[0]<b[1] && b[2]<b[3];
 if (!validBounds(settings.bounds)) settings.bounds = defaults.bounds;
 // Accent defaults saved by earlier versions count as "not chosen", so the theme's own accent is used.
-const OLD_ACCENTS = ['#4cb8a5','#65dcc4','#2f5bd3'];
+const OLD_ACCENTS = ['#4cb8a5','#65dcc4','#2f5bd3','#1f62c9'];
 const customAccent = () => /^#[0-9a-f]{6}$/i.test(settings.accent) && settings.accent.toLowerCase() !== defaults.accent.toLowerCase()
   && !OLD_ACCENTS.includes(settings.accent.toLowerCase());
 // The default room name follows the language; a name the user typed is kept as typed.
@@ -74,8 +74,7 @@ function node(tag,text,cls) { const e=document.createElement(tag);if(text!==unde
 function applyAppearance() {
   $('#title').textContent = roomName();
   const root = document.documentElement.style;
-  root.setProperty('--accent', customAccent() ? settings.accent : '');   // '' removes the override
-  root.setProperty('--bg', '');                                           // background now comes from the theme
+  root.setProperty('--signal', customAccent() ? settings.accent : '');   // '' removes the override
   $('#roomScene').src = 'assets/scene-'+settings.scene+'.png';
   $('#roomName').value = roomName();
   $('#accent').value = customAccent() ? settings.accent : PALETTE.accent;
@@ -146,7 +145,7 @@ function paintStatus() {
   const status=current.status==='streaming'&&!usable()?'stale':current.status;
   const c=$('#connection');
   c.textContent=statusLabel(status);
-  c.className='status-pill '+({streaming:'is-ok',starting:'is-wait',configuring:'is-wait'}[status]||'is-bad');
+  c.className='link-state '+({streaming:'is-ok',starting:'is-wait',configuring:'is-wait'}[status]||'is-bad');
   $('#sourceNote').textContent=usable()?t('source.live'):t('source.none');
   $('#targetCount').textContent=tracks().length;
   $('#frame').textContent=current.frame_number??'—';
@@ -188,7 +187,7 @@ function paintTargets() {
   if(!ts.length) { list.append(node('p',usable()?t('targets.none'):t('targets.waiting'),'empty'));return; }
   for(const tr of ts) {
     const state=targetState(tr);
-    const card=node('article',undefined,'target'+(state==='suspected'?' warning':''));
+    const card=node('article',undefined,'target state-'+state);
     const head=node('div',undefined,'target-head');
     head.append(node('span',t('target.id',{id:tr.track_id}),'target-id'),node('span',t('state.'+state),'tag tag-'+state));
     card.append(head);
@@ -200,6 +199,14 @@ function paintTargets() {
     if(tr.height_filtered_m!==undefined) pair('k.filtered',num(tr.height_filtered_m)+' m');
     if(tr.reference_m!==undefined) pair('k.reference',num(tr.reference_m)+' m');
     card.append(kv);
+    // Height meter: current height as a share of the reference height; the tick is the fall threshold.
+    const hNow=tr.height_filtered_m!==undefined?tr.height_filtered_m:tr.height_max_m;
+    if(tr.reference_m>0&&Number.isFinite(hNow)) {
+      const meter=node('div',undefined,'meter'),fill=node('i'),tick=node('b');
+      fill.style.width=Math.min(100,Math.max(0,hNow/tr.reference_m*100))+'%';
+      tick.style.left=Math.round(((info.fall&&info.fall.height_ratio)||.6)*100)+'%';
+      meter.append(fill,tick);card.append(meter);
+    }
     if(state==='low') {
       card.append(node('p',t('low.progress',{s:num(tr.low_seconds,0),max:floorMax()}),'target-line'));
       const bar=node('div',undefined,'progress'),fill=node('i');
@@ -260,7 +267,7 @@ function paintClock() { $('#clock').textContent=new Date().toLocaleTimeString(lo
 async function pollState() {
   try { const s=await api('/api/state');if(!Array.isArray(s.tracks))throw Error('Invalid state');current=s;receivedAt=Date.now(); }
   catch(err) { current={status:'unreachable',tracks:[],points:[],error:err&&err.message?err.message:String(err)}; }
-  paintStatus();paintTargets();setTimeout(pollState,200);
+  recordTrails();paintStatus();paintTargets();setTimeout(pollState,200);
 }
 async function pollEvents() {
   try {const list=await api('/api/events');if(!Array.isArray(list))throw Error('Invalid event list');events=list;eventFault='';paintEvents();}
@@ -269,68 +276,151 @@ async function pollEvents() {
 }
 
 // ---------------------------------------------------------------- canvas
-const FONT='16px "IBM Plex Sans", "Microsoft YaHei UI", sans-serif', FONT_BOLD='600 16px "IBM Plex Sans", "Microsoft YaHei UI", sans-serif';
-function mapPoint(x,y,w,h) {
-  const [a,b,c,d]=settings.bounds,scale=Math.min((w-100)/(b-a),(h-84)/(d-c));
-  const left=(w-(b-a)*scale)/2+10,top=(h-(d-c)*scale)/2;
-  return [left+(x-a)*scale,top+(d-y)*scale];
+const SANS='"IBM Plex Sans", "Microsoft YaHei UI", sans-serif', MONO='"IBM Plex Mono", Consolas, monospace';
+const F_TEXT='15px '+SANS, F_ZONE='600 14px '+SANS, F_TICK='14px '+MONO, F_TAG='500 15px '+MONO, F_SUB='14px '+MONO;
+// Recent real positions per track (from /api/state), used to draw where each person has just been.
+const TRAIL_MS=6000, trails=new Map();
+function recordTrails() {
+  const now=Date.now();
+  for(const tr of tracks()) {
+    if(!Number.isFinite(tr.x_m)||!Number.isFinite(tr.y_m)) continue;
+    const list=trails.get(tr.track_id)||[];
+    list.push({x:tr.x_m,y:tr.y_m,t:now});
+    while(list.length&&now-list[0].t>TRAIL_MS) list.shift();
+    trails.set(tr.track_id,list);
+  }
+  for(const [id,list] of trails) if(!list.length||now-list[list.length-1].t>TRAIL_MS) trails.delete(id);
 }
-// Text with a halo in the background colour, so grid lines never cut through labels.
-function label(text,x,y,color){ctx.lineWidth=5;ctx.lineJoin='round';ctx.strokeStyle=PALETTE.stage;ctx.strokeText(text,x,y);ctx.lineWidth=1;ctx.fillStyle=color;ctx.fillText(text,x,y);}
-function zoneRect(z,w,h) { const [x0,y0]=mapPoint(z[0],z[3],w,h),[x1,y1]=mapPoint(z[1],z[2],w,h);return [x0,y0,x1-x0,y1-y0]; }
+// The plot keeps equal metres on both axes and always shows the configured range; it widens
+// (or deepens) that range to fill the whole screen instead of leaving empty bands.
+let V={x0:-2,x1:2,y0:0,y1:4,scale:1,left:0,top:0,right:1,bottom:1};
+function computeView(w,h) {
+  const [a,b,c,d]=settings.bounds, left=64, right=w-24, top=44, bottom=h-44;
+  const W=Math.max(right-left,10), H=Math.max(bottom-top,10), scale=Math.min(W/(b-a),H/(d-c)), cx=(a+b)/2;
+  // Widen/deepen at most this much, so a tall or very wide screen does not show metres of empty room.
+  const spanX=Math.min(W/scale,(b-a)*1.8), spanY=Math.min(H/scale,(d-c)*1.5);
+  const pw=spanX*scale, ph=spanY*scale, l=left+(W-pw)/2;
+  V={x0:cx-spanX/2, x1:cx+spanX/2, y0:c, y1:c+spanY, scale, left:l, top:bottom-ph, right:l+pw, bottom};
+}
+function mapPoint(x,y) { return [V.left+(x-V.x0)*V.scale, V.bottom-(y-V.y0)*V.scale]; }
+// Text with a halo in the screen colour, so grid lines never cut through labels.
+function label(text,x,y,color,font){ if(font)ctx.font=font; ctx.lineWidth=4;ctx.lineJoin='round';ctx.strokeStyle=PALETTE.stage;ctx.strokeText(text,x,y);ctx.lineWidth=1;ctx.fillStyle=color;ctx.fillText(text,x,y); }
+function zoneRect(z) { const [x0,y0]=mapPoint(z[0],z[3]),[x1,y1]=mapPoint(z[1],z[2]);return [x0,y0,x1-x0,y1-y0]; }
+function zoneRects() { return ((zones&&zones.enabled)?zones.exclusions:[]).concat((info.fall&&info.fall.safe_zones)||[]).map(zoneRect); }
+function clipToPlot() { ctx.save();ctx.beginPath();ctx.rect(V.left,V.top,V.right-V.left,V.bottom-V.top);ctx.clip(); }
+function drawGrid() {
+  const span=Math.max(V.x1-V.x0,V.y1-V.y0), major=span>24?5:span>12?2:1, minor=major/2;
+  clipToPlot();
+  for(const [step,color] of [[minor,PALETTE.grid],[major,PALETTE.major]]) {
+    ctx.strokeStyle=color;ctx.beginPath();
+    for(let x=Math.ceil(V.x0/step)*step;x<=V.x1;x+=step){const px=Math.round(mapPoint(x,0)[0])+.5;ctx.moveTo(px,V.top);ctx.lineTo(px,V.bottom);}
+    for(let y=Math.ceil(V.y0/step)*step;y<=V.y1;y+=step){const py=Math.round(mapPoint(0,y)[1])+.5;ctx.moveTo(V.left,py);ctx.lineTo(V.right,py);}
+    ctx.stroke();
+  }
+  // Centre line: straight ahead of the radar.
+  if(V.x0<0&&V.x1>0){const px=Math.round(mapPoint(0,0)[0])+.5;ctx.strokeStyle=PALETTE.edge;ctx.setLineDash([2,4]);ctx.beginPath();ctx.moveTo(px,V.top);ctx.lineTo(px,V.bottom);ctx.stroke();ctx.setLineDash([]);}
+  // Range rings: distance from the radar, labelled at 30 degrees right of straight ahead.
+  const [rx,ry]=mapPoint(0,0), maxR=Math.hypot(Math.max(Math.abs(V.x0),Math.abs(V.x1)),Math.max(Math.abs(V.y0),Math.abs(V.y1)));
+  ctx.strokeStyle=PALETTE.ring;ctx.setLineDash([5,5]);
+  for(let r=major;r<=maxR;r+=major){ctx.beginPath();ctx.arc(rx,ry,r*V.scale,Math.PI,2*Math.PI);ctx.stroke();}
+  ctx.setLineDash([]);
+  for(let r=major;r<=maxR;r+=major){
+    const [lx,ly]=mapPoint(r*Math.sin(Math.PI/6),r*Math.cos(Math.PI/6));
+    const inZone=zoneRects().some(z=>lx>z[0]-36&&lx<z[0]+z[2]+4&&ly>z[1]-4&&ly<z[1]+z[3]+16);
+    if(!inZone&&lx>V.left+20&&lx<V.right-40&&ly>V.top+16&&ly<V.bottom-8) label(r+' m',lx+4,ly-4,PALETTE.label,F_SUB);
+  }
+  ctx.restore();
+  // Frame and metre ticks (whole metres only).
+  ctx.strokeStyle=PALETTE.edge;ctx.strokeRect(V.left+.5,V.top+.5,V.right-V.left,V.bottom-V.top);
+  ctx.font=F_TICK;ctx.fillStyle=PALETTE.label;
+  ctx.textAlign='center';
+  for(let x=Math.ceil(V.x0/major)*major;x<=V.x1;x+=major){const px=mapPoint(x,0)[0];ctx.fillRect(Math.round(px),V.bottom,1,5);ctx.fillText(String(Math.round(x*10)/10),px,V.bottom+21);}
+  ctx.textAlign='right';
+  for(let y=Math.ceil(V.y0/major)*major;y<=V.y1;y+=major){const py=mapPoint(0,y)[1];ctx.fillRect(V.left-5,Math.round(py),5,1);ctx.fillText(String(Math.round(y*10)/10),V.left-10,py+5);}
+  ctx.textAlign='left';
+}
+function hatch(r,color) {
+  ctx.save();ctx.beginPath();ctx.rect(...r);ctx.clip();ctx.strokeStyle=color;ctx.globalAlpha=.35;ctx.beginPath();
+  for(let s=-r[3];s<r[2];s+=7){ctx.moveTo(r[0]+s,r[1]+r[3]);ctx.lineTo(r[0]+s+r[3],r[1]);}
+  ctx.stroke();ctx.restore();
+}
+function drawZones() {
+  clipToPlot();
+  if(zones&&zones.enabled){
+    ctx.setLineDash([3,3]);ctx.strokeStyle=PALETTE.label;ctx.strokeRect(...zoneRect(zones.roi));ctx.setLineDash([]);
+    for(const z of zones.exclusions){const r=zoneRect(z);hatch(r,PALETTE.excluded);ctx.strokeStyle=PALETTE.edge;ctx.strokeRect(...r);label(t('canvas.excluded'),r[0]+6,r[1]+18,PALETTE.label,F_ZONE);}
+  }
+  for(const z of (info.fall&&info.fall.safe_zones)||[]){
+    const r=zoneRect(z);ctx.fillStyle=PALETTE.safe;ctx.fillRect(...r);
+    ctx.setLineDash([6,4]);ctx.lineWidth=1.5;ctx.strokeStyle=PALETTE.ok;ctx.strokeRect(...r);ctx.setLineDash([]);ctx.lineWidth=1;
+    label(t('canvas.safe'),r[0]+8,r[1]+20,PALETTE.ok,F_ZONE);
+  }
+  ctx.restore();
+}
+function drawRadar() {
+  const [rx,ry]=mapPoint(0,0);
+  if(rx<V.left||rx>V.right) return;
+  // Sensor glyph: the radar board seen from above, with its facing direction.
+  ctx.fillStyle=PALETTE.text;ctx.fillRect(rx-11,ry-6,22,6);
+  ctx.strokeStyle=PALETTE.text;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(rx,ry-6);ctx.lineTo(rx,ry-14);ctx.stroke();ctx.lineWidth=1;
+  label(t('canvas.radar'),rx+16,ry-5,PALETTE.text,F_ZONE);
+}
+function marker(x,y,state,color) {
+  ctx.lineWidth=2;ctx.strokeStyle=PALETTE.stage;ctx.fillStyle=color;ctx.beginPath();
+  if(state==='low'){ctx.moveTo(x,y-9);ctx.lineTo(x+9,y);ctx.lineTo(x,y+9);ctx.lineTo(x-9,y);ctx.closePath();}   // warning: diamond
+  else ctx.arc(x,y,7.5,0,Math.PI*2);
+  ctx.fill();ctx.stroke();
+  ctx.strokeStyle=color;ctx.lineWidth=1.5;
+  if(state==='suspected'){for(const r of [13,19]){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.stroke();}}          // critical: double ring
+  else if(state==='tracking'){ctx.globalAlpha=.35;ctx.beginPath();ctx.arc(x,y,13,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;}
+  ctx.lineWidth=1;
+}
+function drawTargets(accent) {
+  clipToPlot();
+  for(const tr of tracks()){
+    const state=targetState(tr),color=state==='suspected'?PALETTE.alert:state==='low'?PALETTE.warn:accent;
+    const pts=trails.get(tr.track_id)||[];
+    for(let i=1;i<pts.length;i++){const [ax,ay]=mapPoint(pts[i-1].x,pts[i-1].y),[bx,by]=mapPoint(pts[i].x,pts[i].y);
+      ctx.globalAlpha=.08+.6*i/pts.length;ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);ctx.stroke();}
+    ctx.globalAlpha=1;ctx.lineWidth=1;
+    const [x,y]=mapPoint(tr.x_m,tr.y_m), speed=Math.hypot(tr.vx_mps||0,tr.vy_mps||0);
+    if(speed>.05){   // where the radar's velocity says they will be in one second
+      const [ex,ey]=mapPoint(tr.x_m+(tr.vx_mps||0),tr.y_m+(tr.vy_mps||0)),ang=Math.atan2(ey-y,ex-x);
+      ctx.strokeStyle=PALETTE.text;ctx.fillStyle=PALETTE.text;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(ex,ey);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(ex,ey);ctx.lineTo(ex-9*Math.cos(ang-.4),ey-9*Math.sin(ang-.4));ctx.lineTo(ex-9*Math.cos(ang+.4),ey-9*Math.sin(ang+.4));ctx.closePath();ctx.fill();ctx.lineWidth=1;
+    }
+    marker(x,y,state,color);
+    // Tag: identifier in a small box, coordinates underneath.
+    const tag='ID '+tr.track_id;ctx.font=F_TAG;const tw=tag.length*9.1;   // monospace: 0.6 em per character at 15 px
+    const flip=x+18+Math.max(tw+12,118)>V.right-4;   // no room on the right: put the tag on the left
+    const tx=flip?x-18-Math.max(tw+12,118):x+18,ty=y-26;ctx.fillStyle=PALETTE.stage;ctx.strokeStyle=color;ctx.fillRect(tx,ty,tw+12,22);ctx.strokeRect(tx+.5,ty+.5,tw+11,21);
+    ctx.fillStyle=PALETTE.text;ctx.fillText(tag,tx+6,ty+16);
+    label(num(tr.x_m,2)+', '+num(tr.y_m,2)+' m',tx,ty+40,PALETTE.label,F_SUB);
+  }
+  ctx.restore();
+}
 function draw() {
   const rect=canvas.getBoundingClientRect(),w=Math.max(rect.width,1),h=Math.max(rect.height,1),dpr=window.devicePixelRatio||1;
   if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);}
-  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);ctx.font=FONT;ctx.lineWidth=1;
+  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);ctx.font=F_TEXT;ctx.lineWidth=1;ctx.textAlign='left';
   ctx.fillStyle=PALETTE.stage;ctx.fillRect(0,0,w,h);
   const accent=customAccent()?settings.accent:PALETTE.accent;
   if(cloudMode){
     const scale=Math.min(w/5,h/4),project=(x,y,z)=>[w/2+(x*.8+y*.35)*scale,h*.75+(x*.15-y*.25-z*.6)*scale];
-    ctx.strokeStyle=PALETTE.major;
-    for(let i=-2;i<=2;i++){const a=project(i,0,0),b=project(i,3,0);ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke();}
-    for(let i=0;i<=3;i++){const a=project(-2,i,0),b=project(2,i,0);ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke();}
+    ctx.strokeStyle=PALETTE.major;ctx.beginPath();
+    for(let i=-2;i<=2;i++){const a=project(i,0,0),b=project(i,3,0);ctx.moveTo(...a);ctx.lineTo(...b);}
+    for(let i=0;i<=3;i++){const a=project(-2,i,0),b=project(2,i,0);ctx.moveTo(...a);ctx.lineTo(...b);}
+    ctx.stroke();
     const points=usable()?(current.points||[]):[];
-    for(const p of points){const [x,y]=project(p[0],p[1],p[2]);ctx.fillStyle=`hsl(${215-Math.max(-2,Math.min(2,p[2]))*45} 75% ${PALETTE.cloudL}%)`;ctx.fillRect(x,y,3,3);}
-    label(t('canvas.sensor'),16,26,PALETTE.label);
-    if(!points.length) label(usable()?t('canvas.noPoints'):t('canvas.waiting'),16,48,PALETTE.text);
+    for(const p of points){const [x,y]=project(p[0],p[1],p[2]);ctx.fillStyle=`hsl(${200-Math.max(-2,Math.min(2,p[2]))*40} 70% ${PALETTE.cloudL}%)`;ctx.fillRect(x-1,y-1,3,3);}
+    label(t('canvas.sensor'),20,28,PALETTE.label,F_TEXT);
+    if(!points.length) label(usable()?t('canvas.noPoints'):t('canvas.waiting'),20,52,PALETTE.text,F_TEXT);
     $('#plotNote').textContent=t('plot.cloud',{shown:points.length,total:current.point_count??0});
   }else{
-    const [a,b,c,d]=settings.bounds;
-    const [left,bottom]=mapPoint(a,c,w,h),[right,top]=mapPoint(b,d,w,h);
-    // Equal scales on both axes; adaptive grid keeps large ranges bounded. Whole metres are drawn darker.
-    const step=Math.max(.5,Math.ceil(Math.max(b-a,d-c)/30)*.5);
-    for(let x=Math.ceil(a/step)*step;x<=b+1e-9;x+=step){
-      const px=Math.round(mapPoint(x,c,w,h)[0])+.5;ctx.strokeStyle=Math.abs(x)<1e-9?PALETTE.edge:isWhole(x)?PALETTE.major:PALETTE.grid;ctx.beginPath();ctx.moveTo(px,top);ctx.lineTo(px,bottom);ctx.stroke();
-      ctx.fillStyle=PALETTE.label;ctx.textAlign='center';ctx.fillText(num(x,1),px,bottom+20);
-    }
-    for(let y=Math.ceil(c/step)*step;y<=d+1e-9;y+=step){
-      const py=Math.round(mapPoint(a,y,w,h)[1])+.5;ctx.strokeStyle=isWhole(y)?PALETTE.major:PALETTE.grid;ctx.beginPath();ctx.moveTo(left,py);ctx.lineTo(right,py);ctx.stroke();
-      ctx.fillStyle=PALETTE.label;ctx.textAlign='right';ctx.fillText(num(y,1),left-10,py+5);
-    }
-    ctx.textAlign='left';ctx.strokeStyle=PALETTE.edge;ctx.strokeRect(left+.5,top+.5,right-left,bottom-top);
-    if(zones&&zones.enabled){
-      ctx.setLineDash([3,3]);ctx.strokeStyle=PALETTE.label;ctx.strokeRect(...zoneRect(zones.roi,w,h));ctx.setLineDash([]);
-      for(const z of zones.exclusions){const r=zoneRect(z,w,h);ctx.fillStyle=PALETTE.excluded;ctx.fillRect(...r);label(t('canvas.excluded'),r[0]+6,r[1]+18,PALETTE.label);}
-    }
-    for(const z of (info.fall&&info.fall.safe_zones)||[]){
-      const r=zoneRect(z,w,h);ctx.fillStyle=PALETTE.safe;ctx.fillRect(...r);
-      ctx.setLineDash([6,4]);ctx.lineWidth=1.5;ctx.strokeStyle=PALETTE.ok;ctx.strokeRect(...r);ctx.setLineDash([]);ctx.lineWidth=1;
-      ctx.font=FONT_BOLD;label(t('canvas.safe'),r[0]+8,r[1]+20,PALETTE.ok);ctx.font=FONT;
-    }
-    if(a<=0&&b>=0&&c<=0&&d>=0){
-      const [rx,ry]=mapPoint(0,0,w,h);ctx.fillStyle=PALETTE.text;ctx.beginPath();ctx.moveTo(rx,ry-10);ctx.lineTo(rx-7,ry);ctx.lineTo(rx+7,ry);ctx.closePath();ctx.fill();
-      label(t('canvas.radar'),rx+12,ry-3,PALETTE.label);
-    }
-    for(const tr of tracks()){
-      if(tr.x_m<a||tr.x_m>b||tr.y_m<c||tr.y_m>d)continue;
-      const state=targetState(tr),color=state==='suspected'?PALETTE.alert:state==='low'?PALETTE.warn:accent;
-      const [x,y]=mapPoint(tr.x_m,tr.y_m,w,h);
-      if(state==='suspected'){ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,15,0,Math.PI*2);ctx.stroke();ctx.lineWidth=1;}
-      ctx.fillStyle=color;ctx.strokeStyle=PALETTE.stage;ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(x,y,9,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.lineWidth=1;
-      ctx.font=FONT_BOLD;label('ID '+tr.track_id,x+16,y-5,PALETTE.text);ctx.font=FONT;
-      label(num(tr.x_m,1)+', '+num(tr.y_m,1)+' m',x+16,y+13,PALETTE.label);
-    }
-    label(t('canvas.axes'),16,26,PALETTE.label);
+    computeView(w,h);
+    drawGrid();drawZones();drawRadar();drawTargets(accent);
+    label(t('canvas.axes'),V.left,Math.max(26,V.top-14),PALETTE.label,F_TEXT);
+    if(!usable()) label(t('canvas.waiting'),V.left+12,V.top+28,PALETTE.text,F_TEXT);
     $('#plotNote').textContent=t('plot.map');
   }
   requestAnimationFrame(draw);
